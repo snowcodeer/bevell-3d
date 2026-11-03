@@ -16,7 +16,7 @@ def seed(name):
     shutil.rmtree(dst, ignore_errors=True); os.makedirs(f"{dst}/result")
     summary = json.load(open(f"{src}/summary.json"))
     copies = {"views.pkl": "views.pkl", "hull.stl": "hull.stl", "agent_model.step": "agent_model.step",
-              "agent_model.py": "agent_model.py", "agent_model.stl": "agent_model.stl", "agent_report.json": "agent_report.json",
+              "agent_model.py": "agent_model.py", "agent_tree.json": "agent_tree.json", "agent_fusion.zip": "agent_fusion.zip", "agent_model.stl": "agent_model.stl", "agent_report.json": "agent_report.json",
               "model.stl": "model.stl", "model_cad.stl": "model_cad.stl", "model.step": "model.step", "holder.step": "holder.step",
               "holder_top.dxf": "holder_top.dxf", "plan.json": "plan.json"}
     if src.endswith("full"):                          # made before the CAD holder was the default

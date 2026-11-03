@@ -26,6 +26,8 @@ FILES = {  # name -> (label, media type)
     "holder_top.dxf": ("Holder outline, DXF", "image/vnd.dxf"),
     "holder_nest.stl": ("Holder that follows the underside, STL", "model/stl"),
     "agent_model.step": ("Editable CAD by Muse Spark, STEP", "application/step"),
+    "agent_fusion.zip": ("Fusion 360 script: the feature tree as a timeline", "application/zip"),
+    "agent_tree.json": ("Feature tree, JSON", "application/json"),
     "agent_model.py": ("Editable CAD by Muse Spark, CadQuery script", "text/x-python"),
     "agent_model.stl": ("Editable CAD by Muse Spark, STL", "model/stl"),
 }

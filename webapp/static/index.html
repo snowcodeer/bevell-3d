@@ -385,7 +385,7 @@ function agentCard(id, st) {
     card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>${esc(best.features)}</b>
       <div class="facts"><div class="fact"><b>${best.size_mm.map((v) => v.toFixed(1)).join(" × ")}</b><span>mm</span></div>
       <div class="fact"><b>${Object.keys(best.params).length} dimensions</b><span>${(r.best_iou * 100).toFixed(0)}% match to photos</span></div></div>
-      <div class="examples">${f["agent_model.py"] ? `<a class="chip" href="${f["agent_model.py"]}" download>Script (.py)</a>` : ""}${f["agent_model.step"] ? `<a class="chip" href="${f["agent_model.step"]}" download>STEP</a>` : ""}</div>`;
+      <div class="examples">${f["agent_fusion.zip"] ? `<a class="chip" href="${f["agent_fusion.zip"]}" download>Fusion 360</a>` : ""}${f["agent_model.step"] ? `<a class="chip" href="${f["agent_model.step"]}" download>STEP</a>` : ""}${f["agent_tree.json"] ? `<a class="chip" href="${f["agent_tree.json"]}" download>Feature tree</a>` : ""}${f["agent_model.py"] ? `<a class="chip" href="${f["agent_model.py"]}" download>Script</a>` : ""}</div>`;
     return;
   }
   if (a?.state === "running" || a?.state === "queued") {
