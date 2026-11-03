@@ -29,6 +29,16 @@ def seed(name):
     for a, b in copies.items():
         if os.path.exists(f"{src}/{a}"):
             shutil.copy(f"{src}/{a}", f"{dst}/result/{b}")
+    if not os.path.exists(f"{src}/pads.3mf"):          # scans made before pads were part of a run
+        from bevell3d.gripper import write_pads
+        try:
+            _, g = write_pads(f"{dst}/result", trimesh.load(f"{dst}/result/model.stl"))
+            summary["grasp"] = {k: g[k] for k in ("centre_mm", "squeeze_axis", "closed_on_object_mm")}
+        except Exception as e:
+            print("no pads for", name, e)
+    else:
+        for f in ("pads.3mf", "pad_fixed_jaw.stl", "pad_moving_jaw.stl", "grasp.json"):
+            shutil.copy(f"{src}/{f}", f"{dst}/result/{f}")
     if os.path.isdir(f"{src}/photos"):                # the agent checks its CAD against these
         shutil.copytree(f"{src}/photos", f"{dst}/result/photos", ignore=shutil.ignore_patterns("full"))
     if not os.path.exists(f"{dst}/result/holder.3mf"):

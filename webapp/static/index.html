@@ -213,6 +213,12 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
         <div class="facts" id="p-facts"></div>
         <p class="muted small">PLA, no supports.<span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
       </div>
+      <div class="card" id="pads-card" hidden>
+        <h3>Gripper pads</h3>
+        <p class="muted small">Stick them on the SO-101's jaws. It then holds this object by its own shape.</p>
+        <div class="facts" id="pads-facts"></div>
+        <div class="examples" id="pads-links"></div>
+      </div>
       <h3>All files</h3>
       <div class="files" id="files"></div>
     </section>
@@ -404,6 +410,12 @@ async function printScreen(id) {
   $("p-facts").innerHTML = [[`${(h.holder_mm || []).map((v) => v.toFixed(0)).join(" × ")} mm`, "size"], [`${h.clearance ?? 0.4} mm`, "clearance"]]
     .map(([b, t]) => `<div class="fact"><b>${b}</b><span>${t}</span></div>`).join("");
   $("files").innerHTML = st.files.map((x) => `<a href="${x.url}" download>${esc(x.label)}<span>${x.name.split(".").pop().toUpperCase()}</span></a>`).join("");
+  $("pads-card").hidden = !f["pads.3mf"];
+  if (f["pads.3mf"]) {
+    const g = s.grasp || {};
+    $("pads-facts").innerHTML = g.closed_on_object_mm ? `<div class="fact"><b>${g.closed_on_object_mm.toFixed(0)} mm</b><span>jaws closed on it</span></div><div class="fact"><b>2 pads</b><span>PLA or TPU</span></div>` : "";
+    $("pads-links").innerHTML = (COARSE ? "" : `<a class="chip" href="bambustudio://open?file=${encodeURIComponent(f["pads.3mf"])}">Open in Bambu Studio</a>`) + `<a class="chip" href="${f["pads.3mf"]}" download>Download 3MF</a>`;
+  }
   const threemf = f["holder.3mf"] || "#";
   actions(...(COARSE ? [link("Save the 3MF", "primary", threemf, true)]
     : [link("Open in Bambu Studio", "primary", "bambustudio://open?file=" + encodeURIComponent(threemf)), link("Download 3MF", "ghost", threemf, true)]));
