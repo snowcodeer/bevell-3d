@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14161a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Bevell 3D · Photo to CAD</title>
+<link rel="icon" href="/static/logo-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* An app, one step per screen: top bar with back and progress, the step, a pinned action bar.
+   Bevell's look: near-black ground, the logo's blue, Outfit for headings, Inter for text. */
+:root {
+  --bg: #14161a; --card: #1b1e24; --card-2: #22262d; --line: #2a2e36; --fg: #eceef2; --muted: #9aa1ad;
+  --accent: #395af6; --accent-dark: #0e36f4; --accent-light: #647ef8; --accent-pale: #8095f9;
+  --ok: #6fd3a5; --warn: #f0c46a; --bad: #ff8a80;
+  --display: "Outfit", "Avenir Next", "Segoe UI", sans-serif; --body: "Inter", -apple-system, "Segoe UI", sans-serif;
+  --gutter: max(18px, env(safe-area-inset-left, 0px)); color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+a { color: var(--accent-light); }
+h1, h2, h3 { font-family: var(--display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(28px, 7vw, 38px); font-weight: 700; }
+h2 { font-size: clamp(22px, 5.5vw, 28px); font-weight: 600; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; }
+.app { max-width: 560px; margin: 0 auto; min-height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+.top { position: sticky; top: 0; z-index: 5; background: rgb(20 22 26 / .92); backdrop-filter: blur(10px);
+  padding: calc(10px + env(safe-area-inset-top, 0px)) var(--gutter) 10px; display: grid; gap: 10px; }
+.top-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.back { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font-size: 18px; cursor: pointer; display: grid; place-items: center; }
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand img.mark { height: 24px; } .brand img.word { height: 12px; }
+.badge { font-size: 11px; font-weight: 600; color: var(--accent-pale); background: rgb(57 90 246 / .14); padding: 2px 8px; border-radius: 999px; }
+.stepname { margin-left: auto; color: var(--muted); font-size: 13px; text-align: right; }
+.bar { height: 4px; border-radius: 4px; background: var(--card-2); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-dark), var(--accent)); transition: width .3s; }
+main { padding: 8px var(--gutter) 24px; }
+.screen { display: none; gap: 18px; animation: in .22s ease-out; }
+.screen.on { display: grid; }
+@keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .screen { animation: none; } }
+.lede { color: var(--muted); font-size: 16px; }
+.muted { color: var(--muted); } .small { font-size: 13px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.gets { display: grid; gap: 12px; }
+.get { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; }
+.get .ic { width: 40px; height: 40px; border-radius: 12px; background: rgb(57 90 246 / .14); display: grid; place-items: center; font-family: var(--display); font-weight: 700; color: var(--accent-pale); }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 600 13px var(--body); padding: 9px 13px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--line); color: var(--fg); text-decoration: none; }
+.chip:hover { border-color: var(--accent); }
+.check { display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: center; padding: 13px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); cursor: pointer; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); margin: 1px 0 0; }
+.check b { display: block; }
+ul.tips { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+ul.tips li::marker { color: var(--accent-light); }
+svg.art { width: 100%; height: auto; border-radius: 16px; background: var(--card-2); }
+.dialbox { display: grid; justify-items: center; gap: 8px; text-align: center; }
+.dialbox svg { width: min(78vw, 290px); height: auto; }
+.ring { color: var(--accent-pale); font-weight: 600; font-size: 12px; letter-spacing: .06em; }
+.shotcount { font-family: var(--display); font-size: 30px; font-weight: 700; }
+.strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; min-height: 46px; }
+.strip img, .strip div { flex: 0 0 56px; height: 42px; border-radius: 6px; object-fit: cover; background: var(--card-2); display: grid; place-items: center; font-size: 10px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.ph { position: relative; }
+.ph img, .ph div.heic { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; background: var(--card-2); display: grid; place-items: center; font-size: 11px; color: var(--muted); }
+.ph button { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgb(20 22 26 / .85); color: #fff; cursor: pointer; font-size: 15px; }
+.status { font-weight: 600; } .status.ok { color: var(--ok); } .status.warn { color: var(--warn); }
+.stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.stages li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; color: var(--muted); }
+.stages li.active { background: rgb(57 90 246 / .1); color: var(--fg); }
+.stages li.done { color: var(--fg); }
+.dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #3a3f49; }
+li.active .dot { border-color: var(--accent-light); border-top-color: transparent; animation: spin .8s linear infinite; }
+li.done .dot { background: var(--ok); border-color: var(--ok); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { li.active .dot { animation: none; } }
+.plan .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent-pale); background: rgb(57 90 246 / .14); padding: 2px 8px; border-radius: 999px; margin-right: 6px; }
+.issues { margin: 0; padding-left: 18px; color: var(--warn); font-size: 13px; }
+.viewer-wrap { position: relative; }
+#viewer { width: 100%; aspect-ratio: 1 / 1; border-radius: 18px; background: radial-gradient(120% 90% at 50% 20%, #262a32, #16181d); display: block; touch-action: none; }
+.seg { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; background: rgb(20 22 26 / .85); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
+.seg button { flex: 1; font: 600 13px var(--body); color: var(--muted); background: none; border: 0; padding: 9px 6px; border-radius: 9px; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; }
+.hint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fact { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.fact b { font-family: var(--display); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 12px; }
+.fact.wide { grid-column: 1 / -1; }
+.card .fact { background: var(--card-2); }
+.files { display: grid; gap: 8px; }
+.files a { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--fg); text-decoration: none; font-size: 14px; }
+.files a span { color: var(--muted); font-size: 12px; }
+.files a:hover { border-color: var(--accent); }
+.times { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.err { color: var(--bad); }
+.actions { position: sticky; bottom: 0; z-index: 5; background: linear-gradient(to top, var(--bg) 72%, rgb(20 22 26 / 0));
+  padding: 16px var(--gutter) calc(14px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; }
+.actions:empty { display: none; }
+.btn { font: 600 16px var(--body); border: 0; border-radius: 14px; min-height: 52px; padding: 12px 18px; cursor: pointer; color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn.primary { background: linear-gradient(135deg, var(--accent-dark), var(--accent)); }
+.btn.primary:active { transform: scale(.99); }
+.btn.primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn.ghost { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
+.btn:focus-visible, .chip:focus-visible, .back:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; }
+.phone-only { display: none; }
+@media (pointer: coarse) { .phone-only { display: block; } .desk-only { display: none !important; } }
+[hidden] { display: none !important; }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="top-row">
+      <button class="back" id="back" aria-label="Back" hidden>←</button>
+      <div class="brand"><img class="mark" src="/static/logo-icon.svg" alt=""><img class="word" src="/static/bevell-wordmark.svg" alt="Bevell"><span class="badge">3D</span></div>
+      <span class="stepname" id="stepname"></span>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  </header>
+
+  <main>
+    <section class="screen" data-screen="start">
+      <h1>Photos in.<br>CAD out.</h1>
+      <p class="lede">16 photos on a printed sheet. Back comes a true-size model and a holder to print.</p>
+      <div class="card gets">
+        <div class="get"><span class="ic">mm</span><b>Measured, not guessed</b></div>
+        <div class="get"><span class="ic">3D</span><b>STEP and STL</b></div>
+        <div class="get"><span class="ic">▣</span><b>Holder, straight to Bambu Studio</b></div>
+      </div>
+      <div class="card"><h3>Examples</h3><div class="examples" id="examples"></div></div>
+      <p class="muted small">Powered by Muse Spark, SAM 3.1 and SAM 3D.</p>
+    </section>
+
+    <section class="screen" data-screen="sheet">
+      <h2>Print the sheet</h2>
+      <a class="btn ghost" href="/sheet.pdf">Download A4 PDF</a>
+      <label class="check"><input type="checkbox" class="sheetchk"><b>Printed at 100%, not "fit to page"</b></label>
+      <label class="check"><input type="checkbox" class="sheetchk"><b>One square measures 22 mm</b></label>
+      <label class="check"><input type="checkbox" class="sheetchk"><b>Taped flat</b></label>
+    </section>
+
+    <section class="screen" data-screen="place">
+      <h2>Object in the middle</h2>
+      <svg class="art" viewBox="0 0 320 210" role="img" aria-label="The object in the middle of the sheet, inside the squares">
+        <rect x="18" y="16" width="284" height="178" rx="6" fill="#eceef2"/>
+        <g fill="#14161a">
+          <rect x="28" y="26" width="18" height="18"/><rect x="83" y="26" width="18" height="18"/><rect x="138" y="26" width="18" height="18"/><rect x="193" y="26" width="18" height="18"/><rect x="248" y="26" width="18" height="18"/><rect x="274" y="26" width="18" height="18"/>
+          <rect x="28" y="166" width="18" height="18"/><rect x="83" y="166" width="18" height="18"/><rect x="138" y="166" width="18" height="18"/><rect x="193" y="166" width="18" height="18"/><rect x="248" y="166" width="18" height="18"/><rect x="274" y="166" width="18" height="18"/>
+          <rect x="28" y="72" width="18" height="18"/><rect x="28" y="120" width="18" height="18"/><rect x="274" y="72" width="18" height="18"/><rect x="274" y="120" width="18" height="18"/>
+        </g>
+        <rect x="56" y="54" width="208" height="102" rx="4" fill="none" stroke="#395af6" stroke-dasharray="5 5" opacity=".6"/>
+        <rect x="128" y="80" width="64" height="50" rx="12" fill="#395af6"/>
+      </svg>
+      <ul class="tips">
+        <li>Inside the dashed line, the way up you want it held.</li>
+        <li>White object? Put coloured card under it.</li>
+      </ul>
+    </section>
+
+    <section class="screen" data-screen="shoot">
+      <div class="dialbox">
+        <span class="ring" id="g-ring"></span>
+        <span class="shotcount" id="g-count"></span>
+        <svg id="dial" viewBox="-80 -84 160 164" role="img" aria-label="Where to stand for the next photo, seen from above"></svg>
+        <p id="g-text" class="lede" style="max-width:34ch"></p>
+      </div>
+      <div class="strip" id="strip"></div>
+      <p class="muted small">Object and most squares in frame. No hands.</p>
+      <input type="file" id="cam" accept="image/*" capture="environment" hidden>
+      <input type="file" id="file" accept="image/*,.heic,.heif" multiple hidden>
+    </section>
+
+    <section class="screen" data-screen="review">
+      <h2>Check photos</h2>
+      <p class="status" id="r-status"></p>
+      <div class="grid" id="grid"></div>
+      <p class="muted small">Remove blurry ones.</p>
+      <p class="err" id="up-err" hidden></p>
+    </section>
+
+    <section class="screen" data-screen="making">
+      <h2>Making your model</h2>
+      <p class="muted" id="m-elapsed">Starting…</p>
+      <ul class="stages" id="stages"></ul>
+      <div class="card plan" id="m-plan" hidden></div>
+      <p class="err" id="m-err" hidden></p>
+    </section>
+
+    <section class="screen" data-screen="result">
+      <h2 id="r-title">Your model is ready</h2>
+      <div class="viewer-wrap">
+        <canvas id="viewer"></canvas>
+        <div class="seg" role="group" aria-label="What to show"><button data-show="model" class="on">Model</button><button data-show="agent" hidden>Editable</button><button data-show="holder">Holder</button><button data-show="both">In holder</button></div>
+        <span class="hint">Drag to turn · pinch to zoom</span>
+      </div>
+      <div class="facts" id="facts"></div>
+      <div class="card" id="agent-card"></div>
+      <div class="card plan" id="r-plan"></div>
+      <div class="times" id="times"></div>
+    </section>
+
+    <section class="screen" data-screen="print">
+      <h2>Print the holder</h2>
+      <div class="card">
+        <div class="facts" id="p-facts"></div>
+        <p class="muted small">PLA, no supports.<span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
+      </div>
+      <h3>All files</h3>
+      <div class="files" id="files"></div>
+    </section>
+  </main>
+
+  <footer class="actions" id="actions"></footer>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { STLLoader } from "three/addons/loaders/STLLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const COARSE = matchMedia("(pointer: coarse)").matches;
+const ORDER = ["start", "sheet", "place", "shoot", "review", "making", "result", "print"];
+const NAMES = { start: "", sheet: "1 / 5", place: "2 / 5", shoot: "3 / 5", review: "4 / 5", making: "5 / 5", result: "", print: "" };
+let files = [], scan = null;
+
+// ---------- navigation: #screen or #screen/scan-id, so the phone's back gesture works ----------
+const go = (screen, id) => { location.hash = id ? `${screen}/${id}` : screen; };
+function show() {
+  const [raw = "start", id] = location.hash.slice(1).split("/");
+  let name = ORDER.includes(raw) ? raw : "start";
+  if (name === "review" && !files.length) name = "shoot";
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.dataset.screen === name));
+  $("stepname").textContent = NAMES[name];
+  $("bar").style.width = `${Math.round((ORDER.indexOf(name) / (ORDER.length - 1)) * 100)}%`;
+  $("back").hidden = name === "start";
+  window.scrollTo(0, 0);
+  ({ start: startScreen, sheet: sheetScreen, place: placeScreen, shoot: shootScreen, review: reviewScreen,
+     making: () => makingScreen(id), result: () => resultScreen(id), print: () => printScreen(id) })[name]();
+}
+addEventListener("hashchange", show);
+$("back").onclick = () => history.back();
+const actions = (...els) => { $("actions").replaceChildren(...els); };
+function button(label, kind, onclick, disabled = false) {
+  const b = document.createElement("button"); b.className = `btn ${kind}`; b.textContent = label; b.disabled = disabled; b.onclick = onclick; return b;
+}
+function link(label, kind, href, download) {
+  const a = document.createElement("a"); a.className = `btn ${kind}`; a.textContent = label; a.href = href; if (download) a.download = ""; return a;
+}
+
+// ---------- start, sheet, set up ----------
+async function startScreen() {
+  actions(button("Start a scan", "primary", () => go("sheet")));
+  try {
+    const ex = await (await fetch("/api/examples")).json();
+    $("examples").innerHTML = ex.length ? ex.map((e) => `<a class="chip" href="#result/${e.id}">${esc(e.name)}</a>`).join("") : `<span class="muted small">No examples yet.</span>`;
+  } catch { $("examples").innerHTML = ""; }
+}
+function sheetScreen() {
+  const boxes = [...document.querySelectorAll(".sheetchk")], ready = () => boxes.every((b) => b.checked);
+  const next = button("Next", "primary", () => go("place"), !ready());
+  boxes.forEach((b) => (b.onchange = () => (next.disabled = !ready())));
+  actions(next, button("I already have one", "ghost", () => go("place")));
+}
+function placeScreen() { actions(button("Next", "primary", () => go("shoot"))); }
+
+// ---------- photos: 6 from about 45 degrees, 8 from low down, 2 from above ----------
+const SHOTS = [
+  ...[0, 60, 120, 180, 240, 300].map((a, i) => ({ ring: "45° UP", r: 42, a, text: i ? "Step round a little." : "Phone at 45°, whole sheet in view." })),
+  ...[15, 60, 105, 150, 195, 240, 285, 330].map((a, i) => ({ ring: "LOW, NEAR THE TABLE", r: 66, a, text: i ? "Step round a little." : "Now go low, phone almost on the table." })),
+  { ring: "FROM ABOVE", r: 12, a: 90, text: "Straight down." },
+  { ring: "FROM ABOVE", r: 12, a: 270, text: "Straight down, turned round." },
+];
+const urls = new Map(), thumb = (f) => { if (!urls.has(f)) urls.set(f, URL.createObjectURL(f)); return urls.get(f); };
+function shootScreen() {
+  const n = files.length, done = n >= SHOTS.length, shot = SHOTS[Math.min(n, SHOTS.length - 1)];
+  $("g-ring").textContent = done ? "ALL 16 TAKEN" : shot.ring;
+  $("g-count").textContent = done ? `${n} photos` : `Photo ${n + 1} of 16`;
+  $("g-text").textContent = done ? "All done." : shot.text;
+  const dot = (x, y, st) => `<circle cx="${x}" cy="${y}" r="${st === "next" ? 8.5 : 5.5}" fill="${st === "done" ? "#6fd3a5" : st === "next" ? "#395af6" : "none"}" stroke="${st === "todo" ? "#5a606b" : st === "next" ? "#8095f9" : "none"}" stroke-width="${st === "next" ? 3 : 1.5}"/>`;
+  let g = `<text x="0" y="79" text-anchor="middle" font-size="8" fill="#9aa1ad" font-family="Inter, sans-serif">seen from above</text><rect x="-60" y="-42" width="120" height="84" rx="4" fill="#eceef2" opacity=".14"/><rect x="-14" y="-10" width="28" height="20" rx="5" fill="#9aa1ad"/>`;
+  SHOTS.forEach((s, i) => { g += dot((Math.cos((s.a * Math.PI) / 180) * s.r).toFixed(1), (-Math.sin((s.a * Math.PI) / 180) * s.r).toFixed(1), i < n ? "done" : i === n ? "next" : "todo"); });
+  $("dial").innerHTML = g;
+  $("strip").innerHTML = files.map((f) => /heic|heif/i.test(f.name) ? `<div>HEIC</div>` : `<img alt="" src="${thumb(f)}">`).join("");
+  $("strip").scrollLeft = 1e6;
+  const take = button(done ? "Another photo" : `Take photo ${n + 1}`, "primary", () => $("cam").click());
+  const pick = button("From your photos", "ghost", () => $("file").click());
+  const review = button(`Done · ${n} photos`, "primary", () => go("review"));
+  if (COARSE) actions(...(n >= 8 ? [take, review] : [take, pick]));
+  else actions(...(n >= 8 ? [review, pick] : [button("Choose photos", "primary", () => $("file").click())]));
+}
+function addFiles(list) {
+  const key = (f) => `${f.name}:${f.size}:${f.lastModified}`, seen = new Set(files.map(key));
+  files = [...files, ...[...list].filter((f) => (/\.(jpe?g|png|heic|heif)$/i.test(f.name) || f.type.startsWith("image/")) && !seen.has(key(f)))];
+  shootScreen();
+}
+$("cam").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+$("file").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+
+function reviewScreen() {
+  const n = files.length;
+  $("r-status").textContent = n >= 12 ? `${n} photos · good` : n >= 8 ? `${n} photos · 16 is better` : `${n} photos · add ${8 - n} more`;
+  $("r-status").className = "status " + (n >= 12 ? "ok" : "warn");
+  $("grid").innerHTML = files.map((f, i) => `<div class="ph">${/heic|heif/i.test(f.name) ? `<div class="heic">HEIC</div>` : `<img alt="" src="${thumb(f)}">`}<button aria-label="Remove photo ${i + 1}" data-i="${i}">×</button></div>`).join("");
+  $("grid").querySelectorAll("button").forEach((b) => (b.onclick = () => { files.splice(+b.dataset.i, 1); reviewScreen(); }));
+  actions(button("Make my CAD", "primary", upload, n < 8 || n > 40), button("Add more", "ghost", () => go("shoot")));
+}
+async function upload() {
+  $("up-err").hidden = true;
+  const btn = $("actions").querySelector(".primary"); btn.disabled = true; btn.textContent = "Uploading…";
+  const fd = new FormData(); files.forEach((f) => fd.append("photos", f, f.name));
+  try {
+    const r = await fetch("/api/scans", { method: "POST", body: fd }); const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || "The upload failed.");
+    go("making", j.id);
+  } catch (e) { $("up-err").textContent = `${e.message} Check your connection and try again.`; $("up-err").hidden = false; btn.disabled = false; btn.textContent = "Make my CAD"; }
+}
+
+// ---------- making it ----------
+const STAGES = [
+  ["plan", "Reading the photos"], ["photos", "Preparing"], ["markers", "Finding the squares"],
+  ["masks", "Cutting out the object"], ["hull", "Building the shape"], ["revolve", "Making the profile"],
+  ["sam3d", "Generating the full shape"], ["fit", "Sizing it"], ["cad", "CAD and holder"],
+];
+const ROUTE = { flat: "Flat part", revolved: "Round, turned shape", freeform: "Freeform shape" };
+const CAD = { revolved: "Editable profile", lofted: "Editable sections", mesh: "Mesh in STEP" };
+const planHTML = (p) => `<div class="small muted">Muse Spark</div><div><span class="tag">${ROUTE[p.route] || esc(p.route)}</span>${esc(p.object)}</div>
+  ${p.photo_issues?.length ? `<ul class="issues">${p.photo_issues.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}`;
+let polling;
+function makingScreen(id) {
+  actions(); clearTimeout(polling); $("m-err").hidden = true; $("m-plan").hidden = true;
+  const tick = async () => {
+    if (location.hash !== `#making/${id}`) return;
+    const r = await fetch(`/api/scans/${id}`), st = await r.json();
+    if (!r.ok) { $("m-err").textContent = st.detail || "That scan can't be found."; $("m-err").hidden = false; return; }
+    if (st.state === "done") { scan = st; return go("result", id); }
+    const done = new Set(st.done || []), route = st.plan?.route;
+    $("stages").innerHTML = STAGES.filter(([k]) => !(route === "revolved" && (k === "sam3d" || k === "fit")) && !(route && route !== "revolved" && k === "revolve"))
+      .map(([k, l]) => `<li class="${done.has(k) ? "done" : st.stage === k ? "active" : ""}"><span class="dot"></span><span>${l}</span></li>`).join("");
+    $("m-elapsed").textContent = st.state === "queued" ? "Next in line…" : `${Math.round(st.elapsed || 0)} s · usually 1–3 min`;
+    if (st.plan) { $("m-plan").hidden = false; $("m-plan").innerHTML = planHTML(st.plan); }
+    if (st.state === "failed") { $("m-err").textContent = `Didn't work: ${st.error}`; $("m-err").hidden = false; actions(button("Take the photos again", "primary", () => { files = []; go("shoot"); })); return; }
+    polling = setTimeout(tick, 1500);
+  };
+  tick();
+}
+
+// ---------- result and print ----------
+async function load(id) {
+  if (scan?.id === id && scan.state === "done") return scan;
+  const st = await (await fetch(`/api/scans/${id}`)).json(); st.id = id; scan = st; return st;
+}
+async function resultScreen(id) {
+  const st = await load(id), s = st.summary;
+  if (!s) return go("making", id);
+  $("r-title").textContent = `Your ${s.plan.object} is ready`;
+  $("facts").innerHTML = [
+    [s.model_mm.map((v) => v.toFixed(1)).join(" × ") + " mm", "size", true],
+    [s.cad ? CAD[s.cad.kind] : "STL only", "CAD"], [`${s.scan.posed}/${s.scan.photos}`, "photos used"],
+  ].map(([b, t, wide]) => `<div class="fact${wide ? " wide" : ""}"><b>${b}</b><span>${t}</span></div>`).join("");
+  $("r-plan").innerHTML = planHTML(s.plan);
+  const T = s.timings_s || {}, L = { plan: "Muse Spark", photos: "photos", markers: "squares", masks: "SAM 3.1", hull: "shape", revolve: "profile", sam3d: "SAM 3D", fit: "fit", cad_and_holder: "CAD + holder", total: "total" };
+  $("times").innerHTML = Object.entries(T).map(([k, v]) => `<span>${L[k] || k} ${v.toFixed(0)} s</span>`).join("");
+  actions(button("Print the holder", "primary", () => go("print", id)), button("New scan", "ghost", () => { files = []; go("sheet"); }));
+  const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
+  viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"]);
+  agentCard(id, st);
+}
+let agentPoll;
+function agentCard(id, st) {
+  clearTimeout(agentPoll);
+  const a = st.agent, card = $("agent-card"), f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
+  if (a?.state === "done" && a.report?.best_iou) {
+    const r = a.report, best = r.rounds.find((x) => x.round === r.best_round) || r.rounds.at(-1);
+    card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>${esc(best.features)}</b>
+      <div class="facts"><div class="fact"><b>${best.size_mm.map((v) => v.toFixed(1)).join(" × ")}</b><span>mm</span></div>
+      <div class="fact"><b>${Object.keys(best.params).length} dimensions</b><span>${(r.best_iou * 100).toFixed(0)}% match to photos</span></div></div>
+      <div class="examples">${f["agent_model.py"] ? `<a class="chip" href="${f["agent_model.py"]}" download>Script (.py)</a>` : ""}${f["agent_model.step"] ? `<a class="chip" href="${f["agent_model.step"]}" download>STEP</a>` : ""}</div>`;
+    return;
+  }
+  if (a?.state === "running" || a?.state === "queued") {
+    card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>Writing and checking the CAD…</b><span class="muted small">${esc(a.detail || "")}${a.elapsed ? ` · ${a.elapsed} s` : ""}</span>`;
+    agentPoll = setTimeout(async () => { if (!location.hash.startsWith("#result/" + id)) return; const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; if (nst.agent?.state === "done") resultScreen(id); else agentCard(id, nst); }, 2000);
+    return;
+  }
+  card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>Turn it into features you can edit</b>
+    ${a?.state === "failed" ? `<span class="err small">Didn't work: ${esc(a.error)}</span>` : `<span class="muted small">About 5 minutes. Checked against your photos.</span>`}`;
+  const b = button("Make it editable", "ghost", async () => { b.disabled = true; await fetch(`/api/scans/${id}/agent`, { method: "POST" }); const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; agentCard(id, nst); });
+  card.append(b);
+}
+async function printScreen(id) {
+  const st = await load(id), s = st.summary, h = s.holder || {};
+  const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
+  $("p-facts").innerHTML = [[`${(h.holder_mm || []).map((v) => v.toFixed(0)).join(" × ")} mm`, "size"], [`${h.clearance ?? 0.4} mm`, "clearance"]]
+    .map(([b, t]) => `<div class="fact"><b>${b}</b><span>${t}</span></div>`).join("");
+  $("files").innerHTML = st.files.map((x) => `<a href="${x.url}" download>${esc(x.label)}<span>${x.name.split(".").pop().toUpperCase()}</span></a>`).join("");
+  const threemf = f["holder.3mf"] || "#";
+  actions(...(COARSE ? [link("Save the 3MF", "primary", threemf, true)]
+    : [link("Open in Bambu Studio", "primary", "bambustudio://open?file=" + encodeURIComponent(threemf)), link("Download 3MF", "ghost", threemf, true)]));
+}
+
+// ---------- 3D viewer ----------
+let three;
+async function viewer(modelUrl, holderUrl, floor, agentUrl) {
+  const canvas = $("viewer");
+  if (!three) {
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x30343c, 1.4));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-1, -1.5, 2.5); scene.add(key);
+    const controls = new OrbitControls(camera, canvas); controls.enableDamping = true;
+    three = { renderer, scene, camera, controls, group: new THREE.Group() }; scene.add(three.group);
+    const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+    new ResizeObserver(resize).observe(canvas); resize();
+    (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+  }
+  const get = (url, color, rough = 0.55) => new Promise((res) => url ? new STLLoader().load(url, (g) => { g = toCreasedNormals(g, Math.PI / 6); g.computeBoundingBox(); res(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05 }))); }) : res(null));
+  const [model, holder, agent] = await Promise.all([get(modelUrl, 0x395af6), get(holderUrl, 0xe6e6ea, 0.7), get(agentUrl, 0x8f74d6)]);
+  document.querySelector('.seg [data-show="agent"]').hidden = !agent;
+  const seated = model.clone(); seated.position.z = floor - model.geometry.boundingBox.min.z;
+  const showIt = (what) => {
+    three.group.clear();
+    if (what === "model") three.group.add(model);
+    if (what === "agent" && agent) three.group.add(agent);
+    if (what === "holder" && holder) three.group.add(holder);
+    if (what === "both") { if (holder) three.group.add(holder); three.group.add(seated); }
+    const box = new THREE.Box3().setFromObject(three.group), c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length();
+    three.controls.target.copy(c); three.camera.up.set(0, 0, 1);
+    three.camera.position.set(c.x + r * 0.9, c.y - r * 1.3, c.z + r * 0.85); three.camera.near = r / 100; three.camera.far = r * 20; three.camera.updateProjectionMatrix();
+    document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("on", b.dataset.show === what));
+  };
+  document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => showIt(b.dataset.show)));
+  showIt("model");
+}
+
+show();
+</script>
+</body>
+</html>

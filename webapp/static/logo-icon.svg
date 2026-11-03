@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="512" height="512" viewBox="-10.2437 -10.2437 20.4873 20.4873">
+  <title>BEVELL icon</title>
+  <!-- The tile carries the dark mark on dark browser chrome. The
+       viewBox centres the mark's bounding box, with equal margins on
+       each axis. Centring on the ink's centre of mass instead pushes
+       the B up and right, because the bowl is bottom-left heavy, and
+       that is what reads as off centre. -->
+  <rect x="-10.2437" y="-10.2437" width="20.4873" height="20.4873" rx="4.5072" ry="4.5072" fill="#FFFFFF"/>
+  <g stroke="none">
+    <path d="M 0.7756 -6.2189 L -5.1439 -6.2186 L -5.1814 -6.1936 L -5.1936 -0.7563 A 0.1382 0.1382 0 0 0 -5.0921 -0.7469 L 2.5197 -4.5077 L 2.5197 -5.7655 A 3.5811 3.5811 0 0 0 0.7756 -6.2189 Z" fill="#111214"/>
+    <path d="M 3.7295 -1.1073 A 2.1802 2.1802 0 0 0 4.3567 -2.6378 A 3.5811 3.5811 0 0 0 4.3567 -2.6486 L 4.3562 -2.9642 A 2.6842 2.6842 0 0 0 4.2935 -3.3075 A 3.5811 3.5811 0 0 0 3.0397 -5.4124 L 3.0397 -3.8077 L -4.6815 0.0429 L -4.6816 3.1189 L -4.6564 3.1313 L -4.5813 3.1192 L -1.2503 1.4457 L 3.461 -0.9183 A 0.7 0.7 0 0 1 3.481 -0.9312 L 3.7295 -1.1073 Z" fill="#395AF6"/>
+    <path d="M -5.1939 6.2189 L 2.431 6.2062 A 3.2364 3.2364 0 0 0 5.1933 3.3813 L 5.1939 2.8063 A 2.8769 2.8769 0 0 0 4.4686 1.0064 L 4.4685 0.994 A 2.8997 2.8997 0 0 0 3.2227 0.1617 L 3.0936 0.1564 L -2.0153 2.7421 L -5.1389 4.3267 L -5.1815 4.3689 L -5.1939 6.2189 Z" fill="#111214"/>
+  </g>
+</svg>
