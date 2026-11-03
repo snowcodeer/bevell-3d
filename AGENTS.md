@@ -254,8 +254,12 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 - **Results on the rendered benchmark:**
   - Bottle, tree: 0.968 IoU. Code: 0.971, 1.21 mm mean from the true surface, the closest of
     any model.
-  - Mug, code: body, foot, hollow, rim fillet and swept handle; 162.9 × 123.8 × 95.5 mm
+  - Mug, code: body, foot, hollow, rim fillet and swept handle; 160.8 × 122.5 × 94.2 mm
     (true 165.7 × 125.5 × 94.8), 0.958 IoU against the hull's 0.976.
+    - 2.09 mm mean from the true surface, the closest of any method; it models the inside
+      (SAM 3D 2.98, hull 3.57).
+  - Mouse, tree: a lofted dome with a scroll recess, 125.0 × 71.0 × 38.4 mm, 2.6 mm mean;
+    it is held back by the white-on-white masks (SAM 3D fitted: 1.58).
 - **The legacy Fusion plugin** is in `a separate private repo`: the BevellMCP
   add-in, JSON-RPC on `localhost:47821`, with sketch, revolve, loft, sweep, fillet and
   `execute_script` tools. A live "send to Fusion" could post the generated script to
