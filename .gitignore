@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env*
+# Photos, mask caches and outputs stay local
+raw/
+small/
+photos/
+out/
+cache_*.pkl
+*_views.pkl
+*.stl
+*.glb
+*.ply
+!assets/**
