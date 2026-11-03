@@ -4,7 +4,7 @@
 """
 import json, os, time
 import cadquery as cq, trimesh
-from bevell3d.cad import to_cad, holder_cad, to_mesh, write_dxf
+from bevell3d.cad import to_cad, holder_cad_safe, to_mesh, write_dxf
 from bevell3d.run import HULL_HOLDER_AGREEMENT
 from tools.bench_eval import truth_mesh, surface_distance, holder_fit, crop_to
 
@@ -23,7 +23,7 @@ def main():
         cq.exporters.export(cq.Workplane().add(solid), f"{d}/model.step")
         cad_mesh = to_mesh(solid); cad_mesh.export(f"{d}/model_cad.stl")
         base = hull if summary["hull_agreement"] >= HULL_HOLDER_AGREEMENT else model
-        h, hinfo, pocket, outer = holder_cad(base)
+        h, hinfo, pocket, outer = holder_cad_safe(base)
         cq.exporters.export(cq.Workplane().add(h), f"{d}/holder.step")
         hmesh = to_mesh(h); hmesh.export(f"{d}/holder_cad.stl")
         write_dxf(f"{d}/holder_top.dxf", pocket, outer)

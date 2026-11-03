@@ -13,6 +13,7 @@ Three ways in, tried in order of how editable the result is:
 Every candidate is checked against the mesh it came from (volume within 8%); one that is
 not is dropped for the next way in.
 """
+import os
 from dataclasses import dataclass, asdict
 import numpy as np, trimesh, cv2
 import cadquery as cq
@@ -230,12 +231,15 @@ def to_cad(mesh, route="freeform"):
 class HolderParams:
     clearance: float = 0.4     # mm all round the object
     wall: float = 3.0          # mm round the pocket
-    floor: float = 2.0         # mm under the object
+    floor: float = 2.0         # mm under the object (ten 0.2 mm layers)
     depth_fraction: float = 0.5
     max_depth: float = 30.0
     notch_radius: float = 9.0  # finger notches across the narrow side
     notch_depth: float = 0.6   # share of the pocket depth the notches reach
-    edge_fillet: float = 1.0
+    top_fillet: float = 1.5    # outer rim, so it is pleasant to hold and does not chip
+    lead_in: float = 0.8       # chamfer round the pocket's mouth, so the object finds its way in
+    foot_chamfer: float = 0.4  # bottom outer edge, against the first layers' elephant's foot
+    outline_tolerance: float = 0.3
 
 
 def footprint(mesh, px=0.2):
@@ -251,53 +255,323 @@ def footprint(mesh, px=0.2):
     return Polygon(c).buffer(0).simplify(0.1)
 
 
-def holder_cad(mesh, p=HolderParams()):
+def smooth_outline(poly, tol=0.3):
+    """Clean geometry for a traced outline, never inside it.
+
+    A footprint within 2% of a circle becomes a true circle, its radius reaching the farthest
+    point. Anything else becomes a smooth closed curve fitted within `tol` and then pushed out
+    by however far the trace still pokes through. The traced outline carries every voxel and
+    pixel step of the scan; a holder cut from it had a visibly lumpy rim (3 Nov 2026).
+    Returns ("circle", (cx, cy, r)) or ("curve", polygon)."""
+    from scipy.interpolate import splprep, splev
+    from shapely.geometry import Point
+    xy = np.asarray(poly.exterior.coords)[:-1]
+    # Judge everything on points spaced along the outline, not on its vertices: a simplified
+    # box keeps only its four corners, and four corners always lie on a circle.
+    seg = np.r_[0, np.cumsum(np.linalg.norm(np.diff(np.r_[xy, xy[:1]], axis=0), axis=1))]
+    t = np.linspace(0, seg[-1], 400, endpoint=False)
+    ring = np.c_[np.interp(t, seg, np.r_[xy[:, 0], xy[0, 0]]), np.interp(t, seg, np.r_[xy[:, 1], xy[0, 1]])]
+    A = np.c_[2 * ring, np.ones(len(ring))]
+    cx, cy, k = np.linalg.lstsq(A, (ring ** 2).sum(1), rcond=None)[0]
+    r = np.sqrt(k + cx * cx + cy * cy)
+    d = np.hypot(ring[:, 0] - cx, ring[:, 1] - cy)
+    if np.max(np.abs(d - r)) < max(0.6, 0.02 * r):
+        return "circle", (float(cx), float(cy), float(max(d.max(), np.hypot(xy[:, 0] - cx, xy[:, 1] - cy).max())))
+    # An upper envelope: wherever the trace pokes through the fitted curve, that point's target
+    # moves out by the miss and the curve is fitted again, so it moves out only there. Pushing
+    # the whole curve out by the worst miss instead gave a box 1.4 mm of clearance on every flat
+    # side, because the spline rounds its corners about 1 mm inside.
+    target = ring.copy()
+    for _ in range(8):
+        tck, u = splprep([target[:, 0], target[:, 1]], per=True, s=len(ring) * (tol ** 2) * 0.5)
+        sx, sy = splev(np.linspace(0, 1, 800, endpoint=False), tck)
+        smooth = Polygon(np.c_[sx, sy]).buffer(0)
+        miss = np.array([0.0 if smooth.contains(Point(q)) else smooth.exterior.distance(Point(q)) for q in ring])
+        if miss.max() < 0.02:
+            break
+        cx, cy = splev(u, tck)
+        away = ring - np.c_[cx, cy]
+        away /= np.maximum(np.linalg.norm(away, axis=1), 1e-9)[:, None]
+        target += away * (miss[:, None] + 0.02 * (miss[:, None] > 0))
+    poke = float(miss.max())
+    out = smooth.buffer(poke + 0.01, join_style=1) if poke > 0 else smooth
+    # Never more than `tol` outside the trace either: forced round a sharp corner, a smooth
+    # curve bulges out along the sides beside it (a box's pocket came out 1.1 mm too long).
+    return "curve", Polygon(out.exterior)
+
+
+def _resample(poly, spacing=1.5):
+    """Evenly spaced points for an interpolating spline. Spacing them by bend as well, tried on
+    3 Nov to keep a box's corners tight, crowded points into small kinks, the spline wobbled
+    there, and every edge treatment failed on Mario and the mug."""
+    ring = np.asarray(poly.exterior.coords)[:-1]
+    seg = np.r_[0, np.cumsum(np.linalg.norm(np.diff(np.r_[ring, ring[:1]], axis=0), axis=1))]
+    t = np.linspace(0, seg[-1], max(64, int(seg[-1] / spacing)), endpoint=False)
+    return [(float(np.interp(s, seg, np.r_[ring[:, 0], ring[0, 0]])), float(np.interp(s, seg, np.r_[ring[:, 1], ring[0, 1]]))) for s in t]
+
+
+def _wire_polygon(sketch, n=3000):
+    """The closed curve CadQuery will actually cut, as a polygon, so checks run on it."""
+    w = sketch.val() if hasattr(sketch, "val") else sketch
+    w = w if isinstance(w, cq.Wire) else cq.Wire.assembleEdges([w])
+    # Edge by edge, by parameter: a Wire rebuilds its curve for every point asked of it, and by
+    # length CadQuery measures the arc again each time (minutes on one long spline, 16 ms here).
+    edges = w.Edges(); total = sum(e.Length() for e in edges)
+    pts = [q[:2] for e in edges for q in _edge_points(e, np.linspace(0, 1, max(8, int(n * e.Length() / total)), endpoint=False))]
+    return Polygon(pts)
+
+
+def _edge_points(e, ts):
+    """Points at fractions `ts` of an edge's parameter range (CadQuery's parameter mode takes
+    the curve's raw parameter, which for a spline runs over its chord length, not 0 to 1)."""
+    ad = e._geomAdaptor(); a, b = ad.FirstParameter(), ad.LastParameter()
+    return [q.toTuple() for q in e.positions([a + t * (b - a) for t in ts], mode="parameter")]
+
+
+def _outside(poly, ring_pts):
+    """How far the furthest of `ring_pts` lies outside `poly` (0 when all are inside)."""
+    from shapely.geometry import Point
+    return max([0.0] + [poly.exterior.distance(Point(q)) for q in ring_pts if not poly.contains(Point(q))])
+
+
+def _outward(pts):
+    pts = np.asarray(pts)
+    t = np.roll(pts, -1, 0) - np.roll(pts, 1, 0); t /= np.linalg.norm(t, axis=1)[:, None]
+    n = np.c_[t[:, 1], -t[:, 0]]
+    if 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - np.roll(pts[:, 0], -1) * pts[:, 1]) < 0:
+        n = -n                                        # outward, whichever way the ring runs
+    return pts, n
+
+
+def _ring(q, z):
+    return cq.Workplane("XY").spline([tuple(x) for x in q], periodic=True).close().val().translate((0, 0, z))
+
+
+def _foot_cutter(pts, size, ext=0.3):
+    """The 45° chamfer round the bottom edge, built the same way as the lead-in: everything
+    outside a ruled loft from `size` inside the outline at the bed to the outline `size` up."""
+    pts, n = _outward(pts)
+    keep = cq.Solid.makeLoft([_ring(pts - n * (size + ext), -ext), _ring(pts + n * ext, size + ext)], True)
+    lo, hi = pts.min(0) - 20, pts.max(0) + 20
+    slab = cq.Workplane("XY").box(*(hi - lo), size + 2 * ext + 1, centered=False).translate((lo[0], lo[1], -ext - 1)).val()
+    return slab.cut(keep)
+
+
+def _lead_in_cutter(pts, z, size, ext=0.3):
+    """A 45° chamfer round a pocket's mouth, built rather than asked of OpenCascade: its
+    chamfer on Mario's spline pocket ran for over five minutes without an answer. A ruled loft
+    from the points the pocket's spline passes through to the same points moved out along
+    their normals, starting `ext` inside the pocket so no face of it lies on the wall."""
+    pts = np.asarray(pts)
+    t = np.roll(pts, -1, 0) - np.roll(pts, 1, 0); t /= np.linalg.norm(t, axis=1)[:, None]
+    n = np.c_[t[:, 1], -t[:, 0]]
+    if 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - np.roll(pts[:, 0], -1) * pts[:, 1]) < 0:
+        n = -n                                        # outward, whichever way the ring runs
+    ring = lambda q, zz: cq.Workplane("XY").spline([tuple(x) for x in q], periodic=True).close().val().translate((0, 0, zz))
+    return cq.Solid.makeLoft([ring(pts - n * ext, z - size - ext), ring(pts + n * (size + ext), z + ext)], True)
+
+
+def holder_cad(mesh, p=HolderParams(), skip=()):
+    """A parametric holder with design for manufacture built in: a smooth outline, a filleted
+    rim, a lead-in chamfer round the pocket, a chamfered foot and rounded finger notches.
+
+    Every check runs on the curves CadQuery cuts, not on the polygons they were made from: an
+    interpolating spline can swing inside the points it passes through, so the pocket is grown
+    until the footprint plus clearance fits inside its own curve."""
+    from shapely.geometry import Point
     height = float(mesh.bounds[1][2] - mesh.bounds[0][2])
     depth = min(p.depth_fraction * height, p.max_depth)
-    foot = footprint(mesh)
-    pocket = foot.buffer(p.clearance, join_style=1).simplify(0.05)
-    outer = pocket.buffer(p.wall, join_style=1).simplify(0.05)
     total = p.floor + depth
+    foot = footprint(mesh)
+    need = np.asarray(foot.buffer(max(p.clearance - 0.05, 0), join_style=1).exterior.coords)
+    kind, shape = smooth_outline(foot, p.outline_tolerance)
+    if kind == "circle":
+        cx, cy, r = shape
+        ri, ro = r + p.clearance, r + p.clearance + p.wall
+        pocket_sk = cq.Workplane("XY").center(cx, cy).circle(ri)
+        outer_sk = cq.Workplane("XY").center(cx, cy).circle(ro)
+        pocket, outer = Point(cx, cy).buffer(ri, 256), Point(cx, cy).buffer(ro, 256)
+    else:
+        sp = lambda pts: cq.Workplane("XY").spline(pts, periodic=True).close()
+        grow = 0.0
+        for _ in range(4):
+            # Closing by 2 mm rounds the inward corners an outward offset sharpens. A chamfer or
+            # fillet cannot pass a bend tighter than itself: Mario's pocket had 0.8 mm corners
+            # under a 0.8 mm lead-in. It only ever widens the pocket.
+            target = shape.buffer(p.clearance + grow + 2, join_style=1).buffer(-2, join_style=1)
+            pocket_pts = _resample(target)
+            pocket_sk = sp(pocket_pts)
+            pocket = _wire_polygon(pocket_sk)
+            miss = _outside(pocket, need)
+            if miss <= 0 and pocket.is_valid:
+                break
+            grow += miss + 0.03
+        # The outside only has to be smooth and at least a wall thick: closing it by 3.5 mm
+        # turns the inward corners an offset leaves into rounds wider than the rim fillet, and
+        # only ever adds material.
+        outer_target = target.buffer(p.wall + 3.5, join_style=1).buffer(-3.5, join_style=1)
+        outer_pts = _resample(outer_target)
+        outer_sk = sp(outer_pts)
+        outer = _wire_polygon(outer_sk)
+    body = outer_sk.extrude(total).cut(pocket_sk.extrude(depth + 1).translate((0, 0, p.floor)))
+    dfm = {"outline": kind}
 
-    def spline_face(poly, n=160):
-        ring = np.asarray(poly.exterior.coords)[:-1]
-        seg = np.r_[0, np.cumsum(np.linalg.norm(np.diff(np.r_[ring, ring[:1]], axis=0), axis=1))]
-        t = np.linspace(0, seg[-1], n, endpoint=False)
-        pts = [(float(np.interp(s, seg, np.r_[ring[:, 0], ring[0, 0]])), float(np.interp(s, seg, np.r_[ring[:, 1], ring[0, 1]]))) for s in t]
-        return cq.Workplane("XY").spline(pts, periodic=True).close()
+    def treat(name, select, op, size):
+        nonlocal body
+        if name.rsplit("_", 2)[0] in skip:
+            dfm[name] = "off"; return
+        try:
+            edges = [e for e in body.edges().vals() if select(e)]
+            if not edges:
+                dfm[name] = "no edges"; return
+            new = body.newObject(edges)
+            new = new.fillet(size) if op == "fillet" else new.chamfer(size)
+            if new.val().isValid():
+                body = new; dfm[name] = round(size, 2)
+            else:
+                dfm[name] = "skipped (invalid)"
+        except Exception as e:
+            dfm[name] = f"skipped ({type(e).__name__})"
 
-    body = spline_face(outer).extrude(total)
-    body = body.cut(spline_face(pocket).extrude(depth + 1).translate((0, 0, p.floor)))
-    # Notches at both ends of the footprint's narrow axis, from the rim down.
+    at = lambda e: _edge_points(e, (0.1, 0.5, 0.9))
+    off = lambda ring, e: max(ring.exterior.distance(Point(q[0], q[1])) for q in at(e))
+    # The rim and the foot while each is still one closed loop, which OpenCascade fillets
+    # reliably; a loop broken by notches first failed on two of five holders.
+    if kind == "circle" or "lead_in" in skip:
+        treat("lead_in_chamfer_mm", lambda e: all(abs(q[2] - total) < 0.05 for q in at(e)) and off(pocket, e) < 0.05, "chamfer", p.lead_in)
+    else:
+        try:
+            new = body.cut(_lead_in_cutter(pocket_pts, total, p.lead_in))
+            if new.val().isValid():
+                body = new; dfm["lead_in_chamfer_mm"] = p.lead_in
+            else:
+                dfm["lead_in_chamfer_mm"] = "skipped (invalid)"
+        except Exception as ex:
+            dfm["lead_in_chamfer_mm"] = f"skipped ({type(ex).__name__})"
+    treat("top_fillet_mm", lambda e: all(abs(q[2] - total) < 0.05 for q in at(e)) and off(outer, e) < 0.05, "fillet", min(p.top_fillet, p.wall / 2.2))
+    if kind == "circle" or "foot" in skip:
+        treat("foot_chamfer_mm", lambda e: all(abs(q[2]) < 0.05 for q in at(e)) and off(outer, e) < 0.05, "chamfer", p.foot_chamfer)
+    else:
+        try:
+            new = body.cut(_foot_cutter(outer_pts, p.foot_chamfer))
+            if new.val().isValid():
+                body = new; dfm["foot_chamfer_mm"] = p.foot_chamfer
+            else:
+                dfm["foot_chamfer_mm"] = "skipped (invalid)"
+        except Exception as ex:
+            dfm["foot_chamfer_mm"] = f"skipped ({type(ex).__name__})"
+    # Finger notches: a U scoop through the wall at both ends of the footprint's narrow axis,
+    # a horizontal cylinder centred on the rim, so the bottom of the notch is round as cut.
     xy = np.asarray(foot.exterior.coords)
-    c = xy.mean(0); w, V = np.linalg.eigh(np.cov((xy - c).T)); minor = V[:, 0]
+    c = xy.mean(0); _, V = np.linalg.eigh(np.cov((xy - c).T)); minor = V[:, 0]
     proj = (xy - c) @ minor
+    r = min(p.notch_radius, depth * p.notch_depth)
+    reach = p.clearance + p.wall + 6
+    axes = []
     for end in (proj.min(), proj.max()):
-        nx, ny = c + minor * end
-        cutter = cq.Workplane("XY").circle(p.notch_radius).extrude(depth * p.notch_depth + 1) \
-            .translate((nx, ny, total - depth * p.notch_depth))
-        body = body.cut(cutter)
-    try:
-        body = body.faces(">Z").edges().fillet(min(p.edge_fillet, p.wall / 3))
-    except Exception:
-        pass
+        n = c + minor * end
+        start = (n[0] - minor[0] * reach, n[1] - minor[1] * reach, total)
+        axes.append((np.array(start), np.array([minor[0], minor[1], 0.0])))
+        body = body.cut(cq.Workplane(cq.Plane(origin=start, xDir=(0, 0, 1), normal=(minor[0], minor[1], 0)))
+                        .circle(r).extrude(2 * reach))
+    dfm["notch_mm"] = round(r, 1)
+
+    def on_notch(e):
+        for o, d in axes:
+            if all(abs(np.linalg.norm(np.cross(np.array(q) - o, d)) - r) < 0.05 for q in at(e)):
+                return True
+        return False
+    # Where a notch crosses the rim fillet and the lead-in OpenCascade often refuses a fillet;
+    # then a smaller one, then a chamfer. A notch left sharp still prints and is reported.
+    for name, op, size in (("notch_fillet_mm", "fillet", 0.8), ("notch_fillet_mm", "fillet", 0.4), ("notch_chamfer_mm", "chamfer", 0.4)):
+        treat(name, on_notch, op, size)
+        if not str(dfm[name]).startswith("skipped"):
+            break
     solid = body.val()
-    info = {**asdict(p), "pocket_depth_mm": round(depth, 1), "holder_mm": [round(float(v), 1) for v in solid.BoundingBox().toTuple()[3:6]] if False else None,
-            "valid": bool(solid.isValid())}
     bb = solid.BoundingBox()
-    info["holder_mm"] = [round(bb.xlen, 1), round(bb.ylen, 1), round(bb.zlen, 1)]
-    info["pocket_outline_mm"] = [round(pocket.bounds[2] - pocket.bounds[0], 1), round(pocket.bounds[3] - pocket.bounds[1], 1)]
+    wall = min(outer.exterior.distance(Point(q)) for q in pocket.exterior.coords)
+    dfm.update({"min_wall_mm": round(wall, 2), "floor_mm": p.floor, "pocket_clear_of_footprint": _outside(pocket, need) == 0,
+                "overhangs": "none: the pocket walls are vertical", "supports": "not needed",
+                "bed_contact_cm2": round(outer.area / 100, 1)})
+    info = {**asdict(p), "pocket_depth_mm": round(depth, 1), "valid": bool(solid.isValid()),
+            "holder_mm": [round(bb.xlen, 1), round(bb.ylen, 1), round(bb.zlen, 1)],
+            "pocket_outline_mm": [round(pocket.bounds[2] - pocket.bounds[0], 1), round(pocket.bounds[3] - pocket.bounds[1], 1)],
+            "dfm": dfm, "volume_cm3": round(solid.Volume() / 1000, 1)}
     return solid, info, pocket, outer
 
 
-def to_mesh(solid, tol=0.05):
-    """Tessellate a CAD solid for rendering and the fit checks."""
+def _holder_child(vertices, faces, p, skip, step_path):
+    solid, info, pocket, outer = holder_cad(trimesh.Trimesh(vertices, faces, process=False), p, skip)
+    cq.exporters.export(cq.Workplane().add(solid), step_path)
+    return info, pocket.wkt, outer.wkt
+
+
+# Edge treatments that may be dropped, most fragile first. OpenCascade can crash outright on a
+# fillet (a notch on a box's holder did, 3 Nov), which would take the web server with it.
+_FALLBACKS = ((), ("notch",), ("notch", "top", "lead_in", "foot"))
+
+
+def holder_cad_safe(mesh, p=HolderParams(), timeout=240):
+    """holder_cad in a child process: if a fillet crashes or hangs it, try again without the
+    notch fillets, then without any edge treatment, so a scan always gets a holder."""
+    import multiprocessing as mp, tempfile
+    from concurrent.futures import ProcessPoolExecutor
+    from shapely import wkt
+    errors = []
+    for skip in _FALLBACKS:
+        step = tempfile.NamedTemporaryFile(suffix=".step", delete=False).name
+        pool = ProcessPoolExecutor(1, mp_context=mp.get_context("spawn"))
+        try:
+            info, pocket, outer = pool.submit(_holder_child, np.asarray(mesh.vertices), np.asarray(mesh.faces), p, skip, step).result(timeout)
+            solid = cq.importers.importStep(step).val()
+            info["dfm"]["fallback"] = list(skip) or None
+            if errors:
+                info["dfm"]["failed_attempts"] = errors
+            return solid, info, wkt.loads(pocket), wkt.loads(outer)
+        except Exception as e:
+            errors.append(f"{'+'.join(skip) or 'all'}: {type(e).__name__}")
+        finally:
+            for pr in list(getattr(pool, "_processes", {}).values()):
+                pr.kill()
+            pool.shutdown(wait=False, cancel_futures=True)
+            os.remove(step) if os.path.exists(step) else None
+    raise RuntimeError("holder failed: " + "; ".join(errors))
+
+
+def to_mesh(solid, tol=0.05, weld=None):
+    """Tessellate a CAD solid for printing, rendering and the fit checks.
+
+    Unless `weld` is given, the first of no weld, 0.02 and 0.05 mm that comes out watertight:
+    where the holder's lead-in meets the pocket wall OpenCascade leaves edges of 0.01 to 0.03 mm
+    unshared, while welding at 0.05 mm tore the tape holder's notch fillet."""
+    from scipy.spatial import cKDTree
     # A solid sewn from triangles is its mesh already. OpenCascade took 140 to 190 s to mesh
     # Mario's 3,000 flat faces again, most of the 319 s the CAD step took in the web app.
     if getattr(solid, "_source_mesh", None) is not None:
         return solid._source_mesh.copy()
     vs, fs = solid.tessellate(tol, 0.2)
-    return trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs), process=True)
+    v = np.array([q.toTuple() for q in vs]); f0 = np.array(fs)
+    pairs = cKDTree(v).query_pairs(0.05, output_type="ndarray")
+    best = None
+    for r in ((weld,) if weld is not None else (0.0, 0.02, 0.05)):
+        parent = np.arange(len(v))
+        def root(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]; i = parent[i]
+            return i
+        close = pairs[np.linalg.norm(v[pairs[:, 0]] - v[pairs[:, 1]], axis=1) <= r] if r > 0 else pairs[:0]
+        for i, j in close:
+            ri, rj = root(i), root(j)
+            if ri != rj:
+                parent[max(ri, rj)] = min(ri, rj)
+        f = np.array([[root(i) for i in tri] for tri in f0]) if len(close) else f0.copy()
+        f = f[(f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 0] != f[:, 2])]
+        m = trimesh.Trimesh(v, f, process=True)
+        m.update_faces(m.unique_faces()); m.remove_unreferenced_vertices()
+        if m.is_watertight:
+            return m
+        best = best or m
+    return best
 
 
 def write_dxf(path, pocket, outer):

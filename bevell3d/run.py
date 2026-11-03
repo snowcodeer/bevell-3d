@@ -121,13 +121,13 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
     holder = nest
     try:
         import cadquery as cq
-        from .cad import to_cad, holder_cad, to_mesh, write_dxf
+        from .cad import to_cad, holder_cad_safe, to_mesh, write_dxf
         solid, kind, info, why = to_cad(final, plan["route"])
         cq.exporters.export(cq.Workplane().add(solid), os.path.join(out_dir, "model.step"))
         to_mesh(solid).export(os.path.join(out_dir, "model_cad.stl"))   # what the viewer shows
         summary["cad"] = {"kind": kind, "info": {k: v for k, v in info.items() if not isinstance(v, dict)},
                           "why_not": {k: str(v)[:160] for k, v in why.items()}}
-        h, hrep, pocket, outer = holder_cad(holder_base)
+        h, hrep, pocket, outer = holder_cad_safe(holder_base)
         cq.exporters.export(cq.Workplane().add(h), os.path.join(out_dir, "holder.step"))
         write_dxf(os.path.join(out_dir, "holder_top.dxf"), pocket, outer)
         holder = to_mesh(h)
