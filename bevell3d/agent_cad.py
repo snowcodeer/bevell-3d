@@ -27,17 +27,22 @@ SAFE = {k: getattr(builtins, k) for k in (
 
 # --- running a program, out of process ------------------------------------------------------
 
-def _build(code, params, tol, step_path=None):
-    """In a worker process: run the program, return its tessellation (and write STEP if asked)."""
+def _build(program, params, tol, step_path=None):
+    """In a worker process: build a feature tree (dict) or run a program (str), return its
+    tessellation, and write STEP if asked."""
     import cadquery as cq
-    ns = {"cq": cq, "math": math, "__builtins__": SAFE}
-    exec(compile(code, "<muse-spark>", "exec"), ns)
-    res = ns["build"](dict(params))
-    if isinstance(res, cq.Workplane):
-        vals = [v for v in res.vals() if isinstance(v, cq.Shape)]
-        shape = vals[0] if len(vals) == 1 else cq.Compound.makeCompound(vals)
+    if isinstance(program, dict):
+        from .feature_tree import to_cadquery
+        shape, _ = to_cadquery(program, dict(params))
     else:
-        shape = res
+        ns = {"cq": cq, "math": math, "__builtins__": SAFE}
+        exec(compile(program, "<muse-spark>", "exec"), ns)
+        res = ns["build"](dict(params))
+        if isinstance(res, cq.Workplane):
+            vals = [v for v in res.vals() if isinstance(v, cq.Shape)]
+            shape = vals[0] if len(vals) == 1 else cq.Compound.makeCompound(vals)
+        else:
+            shape = res
     solids = shape.Solids()
     if not solids:
         raise ValueError("build(p) returned no solid")
@@ -158,6 +163,56 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
+TREE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "features": {"type": "string"},
+        "parameters": SCHEMA["properties"]["parameters"],
+        "steps": {"type": "array", "items": {"type": "object"}},
+    },
+    "required": ["features", "parameters", "steps"],
+}
+
+TREE_BRIEF = """You are a CAD engineer. Rebuild the object in the photos as a clean parametric
+feature tree, the kind a designer builds in Fusion 360, as JSON.
+
+Return {"features": one line, "parameters": [...], "steps": [...]}.
+Parameters: {"name", "value", "min", "max", "what"}, in millimetres or degrees, 3 to 8 of them.
+Give each a range wide enough for the true value: an optimiser tunes the values against the
+photos, so the ranges matter more than your guesses.
+Every size in a step is a number or an expression in the parameters, as a string:
+"body_d / 2", "h * 0.75", "min(a, b)". Allowed: + - * / ** min max sqrt sin cos tan abs.
+
+Frame: millimetres; Z up; the object rests on z = 0 the way it sits in the photos; centred on
+x = y = 0; its longest horizontal side along X.
+
+Steps, in order (the first must make a solid):
+- revolve: {"id", "op": "revolve", "profile": [[r, z], ...]} a closed outline in the (r, z)
+  half-plane, r >= 0, turned 360 degrees about Z. Start and end on the axis (r = 0).
+- extrude: {"id", "op": "extrude", "shape": SHAPE, "from_z": z, "height": h, "mode": "add" or "cut"}
+- loft: {"id", "op": "loft", "sections": [{"z": z, "shape": SHAPE}, ...]}
+- sweep: {"id", "op": "sweep", "section": SHAPE, "path": {"plane": "XZ" or "YZ", "points": [[a, b], ...]}}
+  a section along a smooth path through the points (XZ: a is x, b is z). Handles are sweeps.
+- shell: {"id", "op": "shell", "thickness": t, "open": "top" or "none"} hollows the body.
+- fillet / chamfer: {"id", "op": "fillet", "edges": "top" | "bottom" | "vertical" | "all", "radius": r}
+SHAPE: {"circle": {"d": d}} | {"rect": {"w": w, "l": l}} | {"ellipse": {"w": w, "l": l}} |
+       {"polygon": [[x, y], ...]}, each with an optional "at": [x, y].
+Use few, real features. Do not model printing, labels or text. Keep fillet radii well below
+the edges they round.
+
+Example, a mug:
+{"features": "revolved body, shell open at the top, swept handle",
+ "parameters": [{"name": "d", "value": 82, "min": 60, "max": 100, "what": "outer diameter"},
+   {"name": "h", "value": 95, "min": 70, "max": 120, "what": "height"},
+   {"name": "wall", "value": 4, "min": 2, "max": 8, "what": "wall"},
+   {"name": "reach", "value": 28, "min": 15, "max": 45, "what": "handle reach"},
+   {"name": "grip", "value": 11, "min": 6, "max": 16, "what": "handle thickness"}],
+ "steps": [{"id": "body", "op": "revolve", "profile": [[0, 0], ["d/2", 0], ["d/2", "h"], [0, "h"]]},
+   {"id": "hollow", "op": "shell", "thickness": "wall", "open": "top"},
+   {"id": "handle", "op": "sweep", "section": {"circle": {"d": "grip"}},
+    "path": {"plane": "XZ", "points": [["d/2 - wall", "h*0.78"], ["d/2 + reach", "h*0.55"], ["d/2 - wall", "h*0.25"]]}}]}
+"""
+
 BRIEF = """You are a CAD engineer. Rebuild the object in the photos as a clean parametric CadQuery
 model that a designer would be happy to edit.
 
@@ -200,21 +255,23 @@ def _img_url(arr_or_path, max_side=900):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def ask(messages, key=None, timeout=300):
+def ask(messages, key=None, timeout=300, mode="tree"):
     key = key or os.environ["MODEL_API_KEY"]
+    fmt = {"name": "feature_tree", "strict": False, "schema": TREE_SCHEMA} if mode == "tree" else \
+          {"name": "cad_program", "strict": True, "schema": SCHEMA}
     body = {"model": MODEL, "max_tokens": 12000, "messages": messages,
-            "response_format": {"type": "json_schema", "json_schema": {"name": "cad_program", "strict": True, "schema": SCHEMA}}}
+            "response_format": {"type": "json_schema", "json_schema": fmt}}
     r = requests.post(BASE + "/chat/completions", headers={"Authorization": "Bearer " + key}, json=body, timeout=timeout)
     r.raise_for_status()
     msg = r.json()["choices"][0]["message"]
     return json.loads(msg["content"]), msg
 
 
-def first_messages(photo_paths, plan, extents):
-    text = (BRIEF + f"\n\nThe object: {plan['object']} (planner's route: {plan['route']}).\n"
+def first_messages(photo_paths, plan, extents, mode="tree"):
+    text = ((TREE_BRIEF if mode == "tree" else BRIEF) + f"\n\nThe object: {plan['object']} (planner's route: {plan['route']}).\n"
             f"Measured from the photos, its outer size is about {extents[0]:.1f} × {extents[1]:.1f} × {extents[2]:.1f} mm "
             "(width × depth × height; these are an outer bound and can run 1 to 3 mm large). "
-            "Return the features, the parameters and the code.")
+            + ("Return the feature tree." if mode == "tree" else "Return the features, the parameters and the code."))
     return [{"role": "user", "content": [{"type": "text", "text": text}] + [{"type": "image_url", "image_url": {"url": _img_url(p)}} for p in photo_paths]}]
 
 
@@ -240,7 +297,7 @@ def diff_sheet(scorer, mesh, photos, picks):
 
 # --- the loop -------------------------------------------------------------------------------
 
-def run_agent(out_dir, rounds=3, log=print, key=None):
+def run_agent(out_dir, rounds=3, log=print, key=None, mode="tree"):
     """out_dir: a finished scan (views.pkl, plan.json, hull.stl, photos/). Writes agent_*.json/.py/.step."""
     vp = pickle.load(open(os.path.join(out_dir, "views.pkl"), "rb"))
     views, masks, size = vp["views"], vp["masks"], vp["size"]
@@ -255,7 +312,7 @@ def run_agent(out_dir, rounds=3, log=print, key=None):
         R, _ = cv2.Rodrigues(v["rv"]); c = (-R.T @ v["tv"]).ravel() - hull.bounding_box.centroid
         elev.append(math.degrees(math.atan2(c[2], math.hypot(c[0], c[1]))))
     picks = sorted({int(np.argmin([abs(e - t) for e in elev])) for t in (45, 10, 85)})
-    messages = first_messages([photos[i] for i in picks], plan, hull.extents)
+    messages = first_messages([photos[i] for i in picks], plan, hull.extents, mode)
     builder = Builder()
     history, best = [], None
     t0 = time.time()
@@ -263,15 +320,19 @@ def run_agent(out_dir, rounds=3, log=print, key=None):
         for rnd in range(1, rounds + 1):
             prog, reply = None, None
             for attempt in range(3):                      # a program that will not build gets its error back
-                prog, reply = ask(messages, key)
+                prog, reply = ask(messages, key, mode=mode)
                 spec = prog["parameters"]
                 try:
+                    if mode == "tree":
+                        from .feature_tree import validate
+                        validate(prog)
+                        prog["code"] = {"parameters": prog["parameters"], "steps": prog["steps"]}
                     builder.build(prog["code"], {p["name"]: p["value"] for p in spec})
                     break
                 except Exception as e:
                     log(f"round {rnd}: program failed ({type(e).__name__}: {str(e)[:120]}); asking for a fix")
-                    messages += [{"role": "assistant", "content": json.dumps(prog)},
-                                 {"role": "user", "content": f"That program failed: {type(e).__name__}: {str(e)[:400]}. Return a corrected version."}]
+                    messages += [{"role": "assistant", "content": json.dumps({k: v for k, v in prog.items() if k != "code" or mode == "code"})},
+                                 {"role": "user", "content": f"That {'tree' if mode == 'tree' else 'program'} failed: {type(e).__name__}: {str(e)[:400]}. Return a corrected version."}]
                     prog = None
             if prog is None:
                 break
@@ -294,7 +355,7 @@ def run_agent(out_dir, rounds=3, log=print, key=None):
             sheet = diff_sheet(scorer, mesh, photos, show)
             Image.fromarray(sheet).save(os.path.join(out_dir, f"agent_diff_round{rnd}.jpg"))
             fitted = ", ".join(f"{k} {v:.1f}" for k, v in res["params"].items())
-            messages += [{"role": "assistant", "content": json.dumps(prog)},
+            messages += [{"role": "assistant", "content": json.dumps({k: v for k, v in prog.items() if k != "code" or mode == "code"})},
                          {"role": "user", "content": [
                              {"type": "text", "text": (
                                  f"Tuned against all {len(views)} photos, your program reaches a mean IoU of {res['iou']:.3f} "
@@ -302,22 +363,32 @@ def run_agent(out_dir, rounds=3, log=print, key=None):
                                  "In the image, per photo: grey = model and photo agree, red = object the model is missing, "
                                  "cyan = model material the object does not have. Revise the program to fix the biggest "
                                  "disagreement: add, remove or change features, widen a range that hit its limit. Keep it "
-                                 "clean and editable. Return the full program.")},
+                                 f"clean and editable. Return the full {'tree' if mode == 'tree' else 'program'}.")},
                              {"type": "image_url", "image_url": {"url": _img_url(sheet, 1200)}}]}]
         if best:
             step = os.path.join(out_dir, "agent_model.step")
             builder.build(best["code"], best["params"], tol=0.1, step_path=step)
             v, f, _, _ = builder.build(best["code"], best["params"], tol=0.1)
             placed(v, f, best["pose"]).export(os.path.join(out_dir, "agent_model.stl"))
+            if mode == "tree":
+                from .feature_tree import write_fusion_script
+                tree = {"features": best["features"], "parameters": [
+                    {**q, "value": round(best["params"][q["name"]], 2)} for q in best["spec"]], "steps": best["code"]["steps"]}
+                json.dump(tree, open(os.path.join(out_dir, "agent_tree.json"), "w"), indent=1)
+                folder = write_fusion_script(os.path.join(out_dir, "fusion", "BevellModel"), tree, best["params"],
+                                             f"{plan['object']}: {best['features']}", len(views))
+                import shutil
+                shutil.make_archive(os.path.join(out_dir, "agent_fusion"), "zip", os.path.join(out_dir, "fusion"))
             script = (f"# {plan['object']}: {best['features']}\n# Written by Muse Spark, dimensions fitted to "
                       f"{len(views)} calibrated photos (mean silhouette IoU {best['iou']:.3f}).\n"
                       "import cadquery as cq, math\n\n"
                       f"P = {json.dumps({k: round(v, 2) for k, v in best['params'].items()}, indent=4)}\n\n"
                       f"{best['code']}\n\nif __name__ == \"__main__\":\n    cq.exporters.export(build(P), \"model.step\")\n")
-            open(os.path.join(out_dir, "agent_model.py"), "w").write(script)
+            if mode == "code":
+                open(os.path.join(out_dir, "agent_model.py"), "w").write(script)
     finally:
         builder.close()
-    report = {"object": plan["object"], "hull_iou": hull_iou, "rounds": history, "best_round": best["round"] if best else None,
+    report = {"object": plan["object"], "mode": mode, "hull_iou": hull_iou, "rounds": history, "best_round": best["round"] if best else None,
               "best_iou": best["iou"] if best else None, "seconds": round(time.time() - t0, 1)}
     json.dump(report, open(os.path.join(out_dir, "agent_report.json"), "w"), indent=1, default=float)
     return report
@@ -327,8 +398,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("scan_dir")
     ap.add_argument("--rounds", type=int, default=3)
+    ap.add_argument("--mode", choices=["tree", "code"], default="tree")
     a = ap.parse_args()
-    rep = run_agent(a.scan_dir, a.rounds)
+    rep = run_agent(a.scan_dir, a.rounds, mode=a.mode)
     print(json.dumps({k: v for k, v in rep.items() if k != "rounds"}, indent=1, default=float))
     for r in rep["rounds"]:
         print(f"round {r['round']}: IoU {r['iou']:.3f}, size {r['size_mm']} mm, {r['features']}")
