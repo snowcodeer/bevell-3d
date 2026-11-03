@@ -9,6 +9,21 @@ SCANS = "out/scans"
 TITLES = {"mario": "Mario figure", "bottle": "Vitamin bottle", "tape": "Tape roll", "mug": "Mug", "mouse": "White mouse"}
 
 
+def rebuild_holder(out, summary):
+    """Cut the example's holder with today's holder_cad, so the examples show the current design."""
+    import cadquery as cq
+    from bevell3d.cad import holder_cad_safe, to_mesh, write_dxf
+    from bevell3d.run import HULL_HOLDER_AGREEMENT
+    hull = summary.get("hull_agreement", 0) >= HULL_HOLDER_AGREEMENT
+    base = trimesh.load(f"{out}/{'hull' if hull else 'model'}.stl")
+    solid, info, pocket, outer = holder_cad_safe(base)
+    cq.exporters.export(cq.Workplane().add(solid), f"{out}/holder.step")
+    write_dxf(f"{out}/holder_top.dxf", pocket, outer)
+    mesh = to_mesh(solid)
+    mesh.export(f"{out}/holder.stl"); mesh.export(f"{out}/holder.3mf")
+    return {**info, "cut_round": "hull" if hull else summary.get("model_source")}
+
+
 def seed(name):
     timed = f"out/bench/{name}/timed"
     src = timed if os.path.exists(f"{timed}/summary.json") else f"out/bench/{name}/full"
@@ -41,8 +56,7 @@ def seed(name):
             shutil.copy(f"{src}/{f}", f"{dst}/result/{f}")
     if os.path.isdir(f"{src}/photos"):                # the agent checks its CAD against these
         shutil.copytree(f"{src}/photos", f"{dst}/result/photos", ignore=shutil.ignore_patterns("full"))
-    if not os.path.exists(f"{dst}/result/holder.3mf"):
-        trimesh.load(f"{dst}/result/holder.stl").export(f"{dst}/result/holder.3mf")
+    summary["holder"] = rebuild_holder(f"{dst}/result", summary)
     summary["holder"].setdefault("floor_mm", summary["holder"].get("floor", 2.0))
     agent = None
     if os.path.exists(f"{dst}/result/agent_report.json"):
@@ -54,5 +68,6 @@ def seed(name):
 
 
 if __name__ == "__main__":
-    for n in ("mario", "bottle", "tape", "mug", "mouse"):
+    import sys
+    for n in sys.argv[1:] or ("mario", "bottle", "tape", "mug", "mouse"):
         seed(n)

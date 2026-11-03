@@ -211,7 +211,7 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
       <h2>Print the holder</h2>
       <div class="card">
         <div class="facts" id="p-facts"></div>
-        <p class="muted small">PLA, no supports.<span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
+        <p class="muted small">PLA, no supports.<span id="p-dfm"></span><span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
       </div>
       <div class="card" id="pads-card" hidden>
         <h3>Gripper pads</h3>
@@ -413,6 +413,9 @@ async function printScreen(id) {
   const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
   $("p-facts").innerHTML = [[`${(h.holder_mm || []).map((v) => v.toFixed(0)).join(" × ")} mm`, "size"], [`${h.clearance ?? 0.4} mm`, "clearance"]]
     .map(([b, t]) => `<div class="fact"><b>${b}</b><span>${t}</span></div>`).join("");
+  const d = h.dfm || {}, has = (k) => typeof d[k] === "number";
+  const made = [has("top_fillet_mm") && "rounded rim", has("lead_in_chamfer_mm") && "lead-in", has("foot_chamfer_mm") && "chamfered foot"].filter(Boolean);
+  $("p-dfm").textContent = made.length ? ` ${made.join(", ").replace(/^./, (c) => c.toUpperCase())}.` : "";
   $("files").innerHTML = st.files.map((x) => `<a href="${x.url}" download>${esc(x.label)}<span>${x.name.split(".").pop().toUpperCase()}</span></a>`).join("");
   $("pads-card").hidden = !f["pads.3mf"];
   if (f["pads.3mf"]) {
