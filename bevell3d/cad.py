@@ -239,7 +239,7 @@ class HolderParams:
     top_fillet: float = 1.5    # outer rim, so it is pleasant to hold and does not chip
     lead_in: float = 0.8       # chamfer round the pocket's mouth, so the object finds its way in
     foot_chamfer: float = 0.4  # bottom outer edge, against the first layers' elephant's foot
-    outline_tolerance: float = 0.3
+    outline_tolerance: float = 0.5  # 0.3 kept small creases on the bottle's outer wall
 
 
 def footprint(mesh, px=0.2):
@@ -255,13 +255,13 @@ def footprint(mesh, px=0.2):
     return Polygon(c).buffer(0).simplify(0.1)
 
 
-def smooth_outline(poly, tol=0.3):
+def smooth_outline(poly, tol=0.5):
     """Clean geometry for a traced outline, never inside it.
 
-    A footprint within 2% of a circle becomes a true circle, its radius reaching the farthest
-    point. Anything else becomes a smooth closed curve fitted within `tol` and then pushed out
-    by however far the trace still pokes through. The traced outline carries every voxel and
-    pixel step of the scan; a holder cut from it had a visibly lumpy rim (3 Nov 2026).
+    A footprint within 1 mm or 3.5% of a circle becomes a true circle, its radius reaching the
+    farthest point. Anything else becomes a smoothing spline (`tol` mm) fitted as an upper
+    envelope of the trace. The traced outline carries every voxel and pixel step of the scan; a
+    holder cut from it had a visibly lumpy rim (3 Nov 2026).
     Returns ("circle", (cx, cy, r)) or ("curve", polygon)."""
     from scipy.interpolate import splprep, splev
     from shapely.geometry import Point
@@ -275,7 +275,9 @@ def smooth_outline(poly, tol=0.3):
     cx, cy, k = np.linalg.lstsq(A, (ring ** 2).sum(1), rcond=None)[0]
     r = np.sqrt(k + cx * cx + cy * cy)
     d = np.hypot(ring[:, 0] - cx, ring[:, 1] - cy)
-    if np.max(np.abs(d - r)) < max(0.6, 0.02 * r):
+    # 1 mm or 3.5% of the radius: the bottle's hull sits ±0.7 mm off a circle; the nearest
+    # thing that is not round (Mario) is 5 mm off. The radius encloses the whole trace.
+    if np.max(np.abs(d - r)) < max(1.0, 0.035 * r):
         return "circle", (float(cx), float(cy), float(max(d.max(), np.hypot(xy[:, 0] - cx, xy[:, 1] - cy).max())))
     # An upper envelope: wherever the trace pokes through the fitted curve, that point's target
     # moves out by the miss and the curve is fitted again, so it moves out only there. Pushing
