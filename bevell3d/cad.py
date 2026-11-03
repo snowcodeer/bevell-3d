@@ -177,8 +177,10 @@ def mesh_cad(mesh, faces=3000):
     shape = sew.SewedShape()
     if shape.ShapeType() == TopAbs_SHELL:
         solid = cq.Solid(ShapeFix_Solid().SolidFromShell(TopoDS.Shell_s(shape)))
+        solid._source_mesh = m                       # to_mesh hands this back (see there)
         return solid, {"triangles": n, "closed_solid": bool(solid.isValid())}
-    return cq.Shape.cast(shape), {"triangles": n, "closed_solid": False}
+    out = cq.Shape.cast(shape); out._source_mesh = m
+    return out, {"triangles": n, "closed_solid": False}
 
 
 def clean_body(mesh, cells=150):
@@ -290,6 +292,10 @@ def holder_cad(mesh, p=HolderParams()):
 
 def to_mesh(solid, tol=0.05):
     """Tessellate a CAD solid for rendering and the fit checks."""
+    # A solid sewn from triangles is its mesh already. OpenCascade took 140 to 190 s to mesh
+    # Mario's 3,000 flat faces again, most of the 319 s the CAD step took in the web app.
+    if getattr(solid, "_source_mesh", None) is not None:
+        return solid._source_mesh.copy()
     vs, fs = solid.tessellate(tol, 0.2)
     return trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs), process=True)
 
