@@ -1,0 +1,11 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "bevell-bridge",
+  "author": "Bevell",
+  "description": {"": "Lets Bevell build a model's feature tree in the open Fusion and read the result back."},
+  "version": "1.0.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
