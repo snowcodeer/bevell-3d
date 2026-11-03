@@ -234,12 +234,13 @@ def build(ui=None, close=False):
                 return OP.NewBodyFeatureOperation
             return OP.CutFeatureOperation if mode == "cut" else OP.JoinFeatureOperation
 
-        def plane_at(z_expr):
+        def plane_at(z_expr, name):
             if abs(mm(z_expr)) < 1e-9:
                 return root.xYConstructionPlane
             pi = root.constructionPlanes.createInput()
             pi.setByOffset(root.xYConstructionPlane, length(z_expr))
-            return root.constructionPlanes.add(pi)
+            pl = root.constructionPlanes.add(pi); pl.name = name + " plane"
+            return pl
 
         def draw(sketch, shape, origin=(0.0, 0.0)):
             at = shape.get("at", [0, 0]); cx, cy = origin[0] + cm(at[0]), origin[1] + cm(at[1])
@@ -282,7 +283,7 @@ def build(ui=None, close=False):
             op, mode = s["op"], s.get("mode", "add")
             try:
                 if op == "revolve":
-                    sk = root.sketches.add(root.xZConstructionPlane); sk.name = s.get("id", "profile")
+                    sk = root.sketches.add(root.xZConstructionPlane); sk.name = s.get("id", "revolve") + " profile"
                     # On the XZ plane, sketch x is world X and sketch y is world -Z.
                     pts = [P(max(0.0, cm(r)), -cm(z)) for r, z in s["profile"]]
                     axis = None
@@ -298,7 +299,7 @@ def build(ui=None, close=False):
                     ri.setAngleExtent(False, adsk.core.ValueInput.createByString("360 deg"))
                     F.revolveFeatures.add(ri).name = s.get("id", "revolve")
                 elif op == "extrude":
-                    sk = root.sketches.add(plane_at(s.get("from_z", 0))); sk.name = s.get("id", "sketch")
+                    sk = root.sketches.add(plane_at(s.get("from_z", 0), s.get("id", "extrude"))); sk.name = s.get("id", "extrude") + " sketch"
                     draw(sk, s["shape"])
                     prof = adsk.core.ObjectCollection.create()
                     for i in range(sk.profiles.count):
@@ -309,13 +310,13 @@ def build(ui=None, close=False):
                 elif op == "loft":
                     li = F.loftFeatures.createInput(operation(mode))
                     for k, sec in enumerate(sorted(s["sections"], key=lambda q: mm(q["z"]))):
-                        sk = root.sketches.add(plane_at(sec["z"])); sk.name = f"{s.get('id', 'loft')}_{k}"
+                        sk = root.sketches.add(plane_at(sec["z"], f"{s.get('id', 'loft')} section {k + 1}")); sk.name = f"{s.get('id', 'loft')} section {k + 1}"
                         draw(sk, sec["shape"])
                         li.loftSections.add(sk.profiles.item(0))
                     F.loftFeatures.add(li).name = s.get("id", "loft")
                 elif op == "sweep":
                     xz = s["path"].get("plane", "XZ") == "XZ"
-                    sk = root.sketches.add(root.xZConstructionPlane if xz else root.yZConstructionPlane); sk.name = s.get("id", "path")
+                    sk = root.sketches.add(root.xZConstructionPlane if xz else root.yZConstructionPlane); sk.name = s.get("id", "sweep") + " path"
                     # XZ: sketch (x, -z); YZ: sketch (-z, y).
                     world = [(cm(a), 0.0, cm(b)) if xz else (0.0, cm(a), cm(b)) for a, b in s["path"]["points"]]
                     spts = adsk.core.ObjectCollection.create()
@@ -324,7 +325,8 @@ def build(ui=None, close=False):
                     curve = sk.sketchCurves.sketchFittedSplines.add(spts) if len(world) > 2 else sk.sketchCurves.sketchLines.addByTwoPoints(spts.item(0), spts.item(1))
                     path = F.createPath(curve)
                     pi = root.constructionPlanes.createInput(); pi.setByDistanceOnPath(path, adsk.core.ValueInput.createByReal(0))
-                    psk = root.sketches.add(root.constructionPlanes.add(pi)); psk.name = s.get("id", "section") + "_section"
+                    spl = root.constructionPlanes.add(pi); spl.name = s.get("id", "sweep") + " section plane"
+                    psk = root.sketches.add(spl); psk.name = s.get("id", "sweep") + " section"
                     o = psk.modelToSketchSpace(P(*world[0]))
                     draw(psk, s["section"], (o.x, o.y))
                     si = F.sweepFeatures.createInput(psk.profiles.item(0), path, operation(mode))

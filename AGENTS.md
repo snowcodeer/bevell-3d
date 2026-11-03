@@ -285,6 +285,14 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   by hand, a loft with a cut and chamfer, a block with an ellipse boss, a polygon cut and a
   fillet, and the agent's bottle and mouse) in Fusion and in CadQuery, and fails on a step
   error or more than 3% volume or 0.5 mm size apart. Results in `out/fusion_e2e.json`.
+  - **3 Nov, Fusion 2706.1.17: all six pass**, volume within 0.6% and size within 0.44 mm of
+    CadQuery, one solid each. Sketches and planes are named after their step ("cap sketch",
+    "cap plane"), parameters Fusion reads as units get `_mm` (`l` to `l_mm`).
+  - If every sketch fails with a missing `.../Resources/sketch/Sketch_feature` folder, Fusion
+    is running from a half-downloaded update: quit it fully and reopen. That is what broke the
+    first BevellBottle run.
+  - `write_fusion_zip` rewrites a scan's script and `agent_fusion.zip` from its
+    `agent_tree.json`; `seed_examples` uses it, so the examples carry today's script.
 - **`bevell3d/agent_cad.py`** (`python -m bevell3d.agent_cad <scan dir> --rounds 2`):
   1. Muse Spark writes the tree; `--mode code` asks for CadQuery code instead.
   2. A sandboxed worker builds it, and Nelder-Mead tunes the parameters and placement
