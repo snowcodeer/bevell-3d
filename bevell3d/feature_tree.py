@@ -378,10 +378,43 @@ def build(ui=None, close=False):
 '''
 
 
+# Fusion refuses a user parameter named like a unit ("param name is not valid": the block's
+# l, b, t and r on 3 Nov), so short names and unit names get "_mm" in the Fusion script only.
+FUSION_UNIT_NAMES = {"mm", "cm", "m", "km", "um", "nm", "in", "inch", "ft", "foot", "yd", "mi", "mil",
+                     "deg", "rad", "l", "ml", "g", "kg", "lb", "oz", "s", "min", "hr", "t"}
+_NOT_EXPRESSIONS = {"op", "id", "mode", "edges", "plane"}
+
+
+def _fusion_names(tree):
+    names = [q["name"] for q in tree["parameters"]]
+    out = {}
+    for n in names:
+        if len(n) <= 2 or n.lower() in FUSION_UNIT_NAMES:
+            new = n + "_mm"
+            while new in names or new in out.values():
+                new += "_"
+            out[n] = new
+    return out
+
+
+def _renamed(obj, names, key=None):
+    """`obj` with every parameter in `names` renamed inside its expressions."""
+    import re
+    if isinstance(obj, dict):
+        return {k: _renamed(v, names, k) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_renamed(v, names, key) for v in obj]
+    if isinstance(obj, str) and key not in _NOT_EXPRESSIONS and names:
+        return re.sub(r"(?<![A-Za-z0-9_])(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")(?![A-Za-z0-9_])",
+                      lambda m: names[m.group(1)], obj)
+    return obj
+
+
 def to_fusion_script(tree, params, title="Bevell model", n_photos=16):
-    pars = {q["name"]: [round(float(params.get(q["name"], q["value"])), 3), q.get("what", "")] for q in tree["parameters"]}
+    names = _fusion_names(tree)
+    pars = {names.get(q["name"], q["name"]): [round(float(params.get(q["name"], q["value"])), 3), q.get("what", "")] for q in tree["parameters"]}
     return (FUSION_HEADER.format(title=title, n_photos=n_photos, params=json.dumps(pars, indent=4),
-                                 steps=json.dumps(tree["steps"], indent=1)) + FUSION_BODY)
+                                 steps=json.dumps(_renamed(tree["steps"], names), indent=1)) + FUSION_BODY)
 
 
 def write_fusion_script(folder, tree, params, title, n_photos=16):
