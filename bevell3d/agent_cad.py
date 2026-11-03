@@ -342,9 +342,11 @@ def run_agent(out_dir, rounds=3, log=print, key=None, mode="tree"):
                 break
             verts, faces, vol, bbox = builder.build(prog["code"], res["params"])
             mesh = placed(verts, faces, res["pose"])
+            # Size from the shape itself: the kernel's bounding box runs loose on lofts and
+            # splines (a mouse loft reported 136 mm for a 125 mm solid).
             entry = {"round": rnd, "features": prog["features"], "iou": res["iou"], "builds": res["builds"],
                      "params": res["params"], "spec": prog["parameters"], "code": prog["code"], "pose": res["pose"],
-                     "size_mm": [round(b, 1) for b in bbox]}
+                     "size_mm": [round(float(e), 1) for e in mesh.extents]}
             history.append(entry)
             if best is None or entry["iou"] > best["iou"]:
                 best = entry
