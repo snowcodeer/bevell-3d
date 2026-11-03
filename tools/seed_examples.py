@@ -57,6 +57,10 @@ def seed(name):
     if os.path.isdir(f"{src}/photos"):                # the agent checks its CAD against these
         shutil.copytree(f"{src}/photos", f"{dst}/result/photos", ignore=shutil.ignore_patterns("full"))
     summary["holder"] = rebuild_holder(f"{dst}/result", summary)
+    if os.path.exists(f"{dst}/result/agent_tree.json"):   # today's Fusion script, not the one the run wrote
+        from bevell3d.feature_tree import write_fusion_zip
+        tree = json.load(open(f"{dst}/result/agent_tree.json"))
+        write_fusion_zip(f"{dst}/result", tree, f"{summary['plan']['object']}: {tree.get('features', '')}")
     summary["holder"].setdefault("floor_mm", summary["holder"].get("floor", 2.0))
     agent = None
     if os.path.exists(f"{dst}/result/agent_report.json"):

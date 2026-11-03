@@ -417,6 +417,14 @@ def to_fusion_script(tree, params, title="Bevell model", n_photos=16):
                                  steps=json.dumps(_renamed(tree["steps"], names), indent=1)) + FUSION_BODY)
 
 
+def write_fusion_zip(out_dir, tree, title, n_photos=16):
+    """The Fusion script folder and agent_fusion.zip that the web app offers, from a tree."""
+    import os, shutil
+    params = {q["name"]: q["value"] for q in tree["parameters"]}
+    write_fusion_script(os.path.join(out_dir, "fusion", "BevellModel"), tree, params, title, n_photos)
+    return shutil.make_archive(os.path.join(out_dir, "agent_fusion"), "zip", os.path.join(out_dir, "fusion"))
+
+
 def write_fusion_script(folder, tree, params, title, n_photos=16):
     """Fusion runs a script from a folder named like the script, with a .manifest beside it."""
     import os

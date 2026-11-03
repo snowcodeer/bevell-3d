@@ -373,14 +373,11 @@ def run_agent(out_dir, rounds=3, log=print, key=None, mode="tree"):
             v, f, _, _ = builder.build(best["code"], best["params"], tol=0.1)
             placed(v, f, best["pose"]).export(os.path.join(out_dir, "agent_model.stl"))
             if mode == "tree":
-                from .feature_tree import write_fusion_script
+                from .feature_tree import write_fusion_zip
                 tree = {"features": best["features"], "parameters": [
                     {**q, "value": round(best["params"][q["name"]], 2)} for q in best["spec"]], "steps": best["code"]["steps"]}
                 json.dump(tree, open(os.path.join(out_dir, "agent_tree.json"), "w"), indent=1)
-                folder = write_fusion_script(os.path.join(out_dir, "fusion", "BevellModel"), tree, best["params"],
-                                             f"{plan['object']}: {best['features']}", len(views))
-                import shutil
-                shutil.make_archive(os.path.join(out_dir, "agent_fusion"), "zip", os.path.join(out_dir, "fusion"))
+                write_fusion_zip(out_dir, tree, f"{plan['object']}: {best['features']}", len(views))
             script = (f"# {plan['object']}: {best['features']}\n# Written by Muse Spark, dimensions fitted to "
                       f"{len(views)} calibrated photos (mean silhouette IoU {best['iou']:.3f}).\n"
                       "import cadquery as cq, math\n\n"
