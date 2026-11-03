@@ -27,13 +27,27 @@ def surface_distance(a, b, n=20000):
             "model_to_truth_mean": float(db.mean()), "model_to_truth_p90": float(np.percentile(db, 90))}
 
 
+def _inside(mesh, pts):
+    """Inside by a majority of three ray directions, and never above the mesh's top.
+
+    trimesh's own test casts one ray, which double-counts a crossing when the ray runs along an
+    edge: on the mouse's holder it put 644 points of open air over the pocket 23 mm "inside"."""
+    votes = np.zeros(len(pts), int)
+    for d in ((0.44, 0.62, 0.65), (-0.71, 0.13, 0.69), (0.21, -0.83, 0.52)):
+        d = np.array(d) / np.linalg.norm(d)
+        _, idx, _ = mesh.ray.intersects_location(pts, np.tile(d, (len(pts), 1)), multiple_hits=True)
+        votes += np.bincount(idx, minlength=len(pts)) % 2
+    return (votes >= 2) & (pts[:, 2] < mesh.bounds[1][2])
+
+
 def holder_fit(holder, truth, floor=2.0, n=12000):
     """Signed distance of the true surface, seated, into the holder: positive means it collides."""
     if len(holder.faces) > 60000:
         holder = holder.simplify_quadric_decimation(face_count=60000)
     seated = truth.copy(); seated.apply_translation((0, 0, floor - truth.bounds[0][2]))
     pts = seated.sample(n)
-    d = trimesh.proximity.ProximityQuery(holder).signed_distance(pts)
+    _, dist, _ = trimesh.proximity.ProximityQuery(holder).on_surface(pts)
+    d = np.where(_inside(holder, pts), dist, -dist)
     inside_pocket = pts[:, 2] < holder.bounds[1][2]
     gap = -d[inside_pocket]
     return {"max_penetration_mm": float(max(0.0, d.max())), "share_colliding_over_0.2mm": float((d > 0.2).mean()),
