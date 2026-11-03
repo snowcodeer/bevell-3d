@@ -144,6 +144,13 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
     except Exception as e:                           # a missing 3MF must not lose the scan
         summary["threemf_error"] = f"{type(e).__name__}: {e}"
     timings["cad_and_holder"] = round(time.time() - t, 1)
+    # Gripper pads for a robot to hold the object by its own shape (SO-101 jaws by default).
+    try:
+        from .gripper import write_pads
+        _, grasp = write_pads(out_dir, final)
+        summary["grasp"] = {k: grasp[k] for k in ("centre_mm", "squeeze_axis", "closed_on_object_mm")}
+    except Exception as e:
+        summary["pads_error"] = f"{type(e).__name__}: {e}"
     timings["total"] = round(time.time() - t0, 1)
     summary["timings_s"] = timings
     progress("done", "ready")
