@@ -197,8 +197,9 @@ def cm(expr):
 
 
 def length(expr):
-    """A Fusion value input that stays linked to the user parameters."""
-    return adsk.core.ValueInput.createByString(f"({expr}) * 1 mm")
+    """A Fusion value input that stays linked to the user parameters. The parameters are in mm
+    and the design's units are mm, so bare numbers in an expression read as mm too."""
+    return adsk.core.ValueInput.createByString(str(expr))
 
 
 def P(x, y, z=0.0):
@@ -206,10 +207,19 @@ def P(x, y, z=0.0):
 
 
 def run(context):
-    ui = None
+    app = adsk.core.Application.get()
+    report = build(app.userInterface, close=False)
+    if report.get("errors") or report.get("fatal"):
+        app.userInterface.messageBox("Some steps did not build:\n\n" + "\n\n".join(report.get("errors", []) + [report.get("fatal", "")])[:1800])
+
+
+def build(ui=None, close=False):
+    """Build the tree in a new design and report on it. With ui None (BevellBridge), no dialogs."""
+    report = {"errors": [], "timeline": [], "parameters": {}, "bodies": []}
+    doc = None
     try:
-        app = adsk.core.Application.get(); ui = app.userInterface
-        app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
+        app = adsk.core.Application.get()
+        doc = app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
         design = adsk.fusion.Design.cast(app.activeProduct)
         design.designType = adsk.fusion.DesignTypes.ParametricDesignType
         design.fusionUnitsManager.distanceDisplayUnits = adsk.fusion.DistanceUnits.MillimeterDistanceUnits
@@ -237,7 +247,7 @@ def run(context):
                 c = sketch.sketchCurves.sketchCircles.addByCenterRadius(P(cx, cy), cm(shape["circle"]["d"]) / 2)
                 try:
                     d = sketch.sketchDimensions.addDiameterDimension(c, P(cx + cm(shape["circle"]["d"]), cy))
-                    d.parameter.expression = f"({shape['circle']['d']}) * 1 mm"
+                    d.parameter.expression = str(shape["circle"]["d"])
                 except Exception:
                     pass
             elif "rect" in shape:
@@ -275,11 +285,15 @@ def run(context):
                     sk = root.sketches.add(root.xZConstructionPlane); sk.name = s.get("id", "profile")
                     # On the XZ plane, sketch x is world X and sketch y is world -Z.
                     pts = [P(max(0.0, cm(r)), -cm(z)) for r, z in s["profile"]]
+                    axis = None
                     for a, b in zip(pts, pts[1:] + pts[:1]):
                         if a.distanceTo(b) > 1e-6:
-                            sk.sketchCurves.sketchLines.addByTwoPoints(a, b)
-                    zmax = max(cm(z) for _, z in s["profile"])
-                    axis = sk.sketchCurves.sketchLines.addByTwoPoints(P(0, 0), P(0, -max(zmax, 0.1))); axis.isConstruction = True
+                            line = sk.sketchCurves.sketchLines.addByTwoPoints(a, b)
+                            if abs(a.x) < 1e-6 and abs(b.x) < 1e-6:
+                                axis = line          # the profile's own edge on the axis
+                    if axis is None:
+                        zmax = max(cm(z) for _, z in s["profile"])
+                        axis = sk.sketchCurves.sketchLines.addByTwoPoints(P(0, 0), P(0, -max(zmax, 0.1))); axis.isConstruction = True
                     ri = F.revolveFeatures.createInput(sk.profiles.item(0), axis, operation(mode))
                     ri.setAngleExtent(False, adsk.core.ValueInput.createByString("360 deg"))
                     F.revolveFeatures.add(ri).name = s.get("id", "revolve")
@@ -344,11 +358,23 @@ def run(context):
                         F.chamferFeatures.add(ci).name = s.get("id", "chamfer")
                 body = root.bRepBodies.item(0) if root.bRepBodies.count else None
             except Exception:
-                ui.messageBox(f"Step {s.get('id', op)} ({op}) did not build and was skipped:\n{traceback.format_exc()[-600:]}")
+                report["errors"].append(f"step {s.get('id', op)} ({op}): {traceback.format_exc()[-700:]}")
         app.activeViewport.fit()
+        report["timeline"] = [design.timeline.item(i).name for i in range(design.timeline.count)]
+        report["parameters"] = {p.name: round(p.value * 10, 3) for p in design.userParameters}
+        for b in root.bRepBodies:
+            bb = b.boundingBox
+            report["bodies"].append({"name": b.name, "volume_mm3": round(b.physicalProperties.volume * 1000, 1),
+                                     "size_mm": [round((bb.maxPoint.x - bb.minPoint.x) * 10, 2), round((bb.maxPoint.y - bb.minPoint.y) * 10, 2),
+                                                 round((bb.maxPoint.z - bb.minPoint.z) * 10, 2)], "solid": b.isSolid})
     except Exception:
-        if ui:
-            ui.messageBox("Bevell script failed:\n" + traceback.format_exc())
+        report["fatal"] = traceback.format_exc()[-1500:]
+    if close and doc:
+        try:
+            doc.close(False)
+        except Exception:
+            pass
+    return report
 '''
 
 
