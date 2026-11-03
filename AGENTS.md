@@ -230,6 +230,37 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     SAM 3D 67, fit 26, CAD and holder 14).
   - Bottle: 59 s in all (revolved, no SAM 3D).
 
+## CAD agent and feature tree (3 Nov)
+
+- **`bevell3d/feature_tree.py`** is the CAD-neutral model. It holds named parameters, and
+  steps (revolve, extrude, loft, sweep, shell, fillet, chamfer) whose sizes are expressions
+  in those parameters.
+  - Expressions are parsed by an AST whitelist and never executed.
+  - `to_cadquery` builds the tree for checking.
+  - `write_fusion_script` writes a Fusion 360 script folder. Running it opens a new
+    parametric design with the parameters as user parameters and each step as a named
+    timeline feature.
+  - Run the script in Fusion from Utilities > Add-Ins > Scripts and Add-Ins.
+  - Not yet run inside Fusion: it only compiles so far.
+  - The bottle's copy is installed at `~/Library/Application Support/Autodesk/Autodesk
+    Fusion 360/API/Scripts/BevellBottle`.
+- **`bevell3d/agent_cad.py`** (`python -m bevell3d.agent_cad <scan dir> --rounds 2`):
+  1. Muse Spark writes the tree; `--mode code` asks for CadQuery code instead.
+  2. A sandboxed worker builds it, and Nelder-Mead tunes the parameters and placement
+     (160 builds, 1 to 6 minutes) on silhouette IoU at quarter resolution.
+  3. Muse Spark gets a per-photo mismatch image (red: missing, cyan: extra) and revises.
+  4. Outputs: `agent_tree.json`, `agent_fusion.zip`, `agent_model.step` and `.stl`, and
+     `agent_report.json`.
+- **Results on the rendered benchmark:**
+  - Bottle, tree: 0.968 IoU. Code: 0.971, 1.21 mm mean from the true surface, the closest of
+    any model.
+  - Mug, code: body, foot, hollow, rim fillet and swept handle; 162.9 × 123.8 × 95.5 mm
+    (true 165.7 × 125.5 × 94.8), 0.958 IoU against the hull's 0.976.
+- **The legacy Fusion plugin** is in `a separate private repo`: the BevellMCP
+  add-in, JSON-RPC on `localhost:47821`, with sketch, revolve, loft, sweep, fillet and
+  `execute_script` tools. A live "send to Fusion" could post the generated script to
+  `execute_script` when the add-in is running. Not wired up yet.
+
 ## Gotchas already paid for
 
 - `cv2.fillPoly` with many triangles fills by even-odd and holes the outline; `project.silhouette`
