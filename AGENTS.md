@@ -191,10 +191,38 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   - Muse Spark's "revolved" lowers the roundness bar from 0.92 to 0.8; the volume check
     still decides.
 - **Holder:** `holder_cad` is parametric (`HolderParams`: clearance 0.4, wall 3, floor 2,
-  half height up to 30 mm, 9 mm notches). The pocket is the object's top-down outline grown
-  by the clearance, with a flat floor. It writes `holder.step`, `holder.stl` and
+  half height up to 30 mm). It writes `holder.step`, `holder.stl`, `holder.3mf` and
   `holder_top.dxf` (layers POCKET and OUTLINE). The voxel nest that follows the underside is
-  kept as `holder_nest.stl`.
+  kept as `holder_nest.stl`. Rebuilt 3 Nov after Natalie found the rim lumpy:
+  - **Outline** (`smooth_outline`): a footprint within 1 mm or 3.5% of a circle is a true
+    circle enclosing the whole trace (the bottle's hull is ±0.7 mm off round; Mario, the
+    nearest thing that is not, 5 mm). Round holders are looser for it: the bottle's median gap
+    went from 0.9 to 1.6 mm, as the tape's always was. Anything else is a smoothing spline
+    (0.5 mm; 0.3 left creases on the bottle) fitted as an upper envelope: points that
+    poke through pull the curve out only where they are, so a box's flat sides keep 0.4 mm.
+    Beside a perfectly sharp corner the curve bulges to about 1 mm; clipping it to the trace
+    left kinks that broke every fillet on Mario and the mug, and so did spacing the spline's
+    points by bend. Both were tried and reverted on 3 Nov.
+  - The pocket's inward corners are closed by 2 mm and the outside's by 3.5 mm, because a
+    chamfer or fillet cannot pass a bend tighter than itself.
+  - **Every check runs on the curve CadQuery cuts**, sampled edge by edge over each edge's own
+    parameter range (`_edge_points`). Asked by length, CadQuery measures the arc again for
+    every point and took minutes; asked by raw parameter, a spline's runs over its chord
+    length, not 0 to 1.
+  - **Edge treatments**, each reported in `info["dfm"]`: 0.8 mm lead-in at the pocket mouth
+    and 0.4 mm chamfer on the foot against elephant's foot, both built as ruled lofts at 45°
+    (`_lead_in_cutter`, `_foot_cutter`) because OpenCascade's own chamfer on Mario's pocket
+    ran for minutes and failed on its foot; 1.36 mm fillet on the outer rim; then U-shaped
+    finger notches (a horizontal cylinder through the
+    wall) with a 0.8 mm fillet, else 0.4, else a 0.4 chamfer. Rim and foot are treated
+    while each is still one closed loop; with the notches cut first they failed on two of five.
+  - **`holder_cad_safe`** runs it in a spawned child. A notch fillet segfaulted OpenCascade on
+    a box, which would take the web server down. On a crash or a hang it retries without the
+    notch treatments, then without any (`_FALLBACKS`); the result says which.
+  - `to_mesh` welds vertices closer than 0.05 mm: the lead-in left 0.01 mm edges unshared.
+  - `to_mesh` hands back the mesh a sewn solid was made from (`_source_mesh`): OpenCascade
+    took 140 to 190 s to mesh Mario's 3,000 flat faces again, most of the 319 s the CAD step
+    took in the web app.
 - **Benchmark (`tools/cad_bench.py`, `out/results/cad.json`):**
   - Bottle: revolved, 61.6 × 61.4 × 111.2 mm (true 62.0 × 61.8 × 110.5).
   - Tape: revolved ring, 117.2 mm with a 75.1 mm bore (a standard core is 76.2).
@@ -241,9 +269,22 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     parametric design with the parameters as user parameters and each step as a named
     timeline feature.
   - Run the script in Fusion from Utilities > Add-Ins > Scripts and Add-Ins.
-  - Not yet run inside Fusion: it only compiles so far.
+  - Its `build(ui, close)` runs without dialogs and returns a report: errors per step, the
+    timeline, the parameters and each body's volume and size. `run()` calls it and shows a
+    message only when a step failed.
+  - Fixed 3 Nov after the first run in Fusion failed: lengths were written as `x * 1 mm`,
+    which Fusion read as mm squared, and the revolve used a separate axis line. It now
+    revolves about the profile's own edge on x = 0.
   - The bottle's copy is installed at `~/Library/Application Support/Autodesk/Autodesk
-    Fusion 360/API/Scripts/BevellBottle`.
+    Fusion 360/API/Scripts/BevellBottle` (the version from before the fixes).
+- **Testing it in Fusion:** `fusion_bridge/BevellBridge` is an add-in that serves
+  `127.0.0.1:47822` inside Fusion and runs a script's `build()` on the main thread. It is
+  installed in Fusion's `API/AddIns` folder; start it once from Utilities > Add-Ins >
+  Scripts and Add-Ins > Add-Ins > BevellBridge > Run (`curl 127.0.0.1:47822/` answers when
+  it is up). Then `.venv/bin/python -m tools.fusion_e2e` builds six trees (bottle and mug
+  by hand, a loft with a cut and chamfer, a block with an ellipse boss, a polygon cut and a
+  fillet, and the agent's bottle and mouse) in Fusion and in CadQuery, and fails on a step
+  error or more than 3% volume or 0.5 mm size apart. Results in `out/fusion_e2e.json`.
 - **`bevell3d/agent_cad.py`** (`python -m bevell3d.agent_cad <scan dir> --rounds 2`):
   1. Muse Spark writes the tree; `--mode code` asks for CadQuery code instead.
   2. A sandboxed worker builds it, and Nelder-Mead tunes the parameters and placement
