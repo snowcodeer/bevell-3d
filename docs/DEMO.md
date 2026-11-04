@@ -1,30 +1,74 @@
 # Demo video: script and shots (3 minutes)
 
-## Tonight's direction (4 Nov, late): give the robot scissors
+The story: **a robot arm can't use scissors. Fifteen photos give it grippers that can.**
 
-The story: **a cheap robot arm can't use scissors. Sixteen photos give it fingers that can.**
+Say "first prototype", "beta, SO-101 and scissors for now" and "tested in simulation". The snap
+clips have not been printed and tried yet; show them working only once they have.
+
+## Before recording
+
+- **The parts:** open `custom_jaws.3mf` from the result's print screen in Bambu Studio, or
+  print the two STLs on their own. Print the moving jaw first (`custom_moving_jaw.stl`, 16 cm3)
+  and try a finger loop in its clip before printing the fixed part
+  (`custom_wrist_roll_follower.stl`, 47 cm3). Check supports in Bambu Studio before slicing.
+- **Screws:** keep the screws as you take the stock moving jaw and wrist roll follower off.
+  The new parts keep the stock mounting holes, so the same screws go back in.
+- **The arm:** after the swap, check the gripper still homes and closes. The simulation opens
+  it to 25.8°; teach the cut inside 0 to 26°.
+- **The cut:** a paper card held by the second arm, a clip or a weight, at the height the
+  blades meet it. Teach the motion once with the leader arm and replay it on camera.
+- **The app:** open https://nataliechan1963--bevell-3d-web.us-east.modal.run two minutes
+  before filming (the first request wakes the container). Never show the passcode on screen.
+  A gripper run takes about 6 minutes (372 s on the live run); film the start and the end and
+  cut the wait.
+- **Fallback result:** the finished live run on the real scissors,
+  https://nataliechan1963--bevell-3d-web.us-east.modal.run/#result/f684f76b871f
+- **Simulation B-roll** from that run: `out/real_scissors/live_f684/sim_side.mp4` and
+  `out/real_scissors/live_f684/sim_three_quarter.mp4` (MuJoCo, the SO-101 opening and closing
+  the scissors).
+- **Capture:** screen-record the phone (QuickTime, iPhone over USB) and film the hands and the
+  arm with a second camera. 1080p is enough.
+
+## Shots
 
 | Time | On screen | Voice-over |
 |---|---|---|
-| 0:00 to 0:10 | The SO-101 with its stock jaws fumbling a pair of scissors. | "A robot arm is useless with a tool it can't hold. Custom fingers usually mean an afternoon of CAD." |
-| 0:10 to 0:40 | Phone: "Make robot fingers", the guided camera's overlay ring by ring, scissors flat and closed on the sheet. | "Sixteen photos on a printed sheet. The squares give every photo its scale and its camera position." |
-| 0:40 to 1:00 | The making screen: Muse Spark names the tool, SAM 3.1 cuts it out. | "Muse Spark plans the scan, SAM 3.1 finds the scissors in every photo, down to the finger loops." |
-| 1:00 to 1:25 | Result: the scissors with their two saddles in 3D, the jaw gap, "tested in MuJoCo". | "Back come fingers shaped to these scissors, fitted to the SO-101's real jaws." |
-| 1:25 to 1:50 | `out/broll/scissors_sim.mp4`: the SO-101 in MuJoCo opening and closing the scissors, the loop riding its rail. | "Tested in simulation first: the gripper's own motion opens and closes the blades." |
-| 1:50 to 2:35 | The print, the fitting (saddle tight on the fixed jaw, loop tied loosely on the moving jaw), the gripper opening and closing the real scissors, then a cut through a card held by the second arm or a clip (taught with the leader arm, replayed). | "Print, clip on, and the arm cuts. Taught once, replayed." |
-| 2:35 to 3:00 | Numbers, the Meta models, the URL. | "Built on Muse Spark, SAM 3.1 and SAM 3D. Any tool with two handles, in minutes." |
+| 0:00 to 0:12 | The SO-101 with its stock jaws, a pair of scissors beside it. | "A robot arm with two fingers can't use scissors. Designing grippers for a tool is usually an afternoon of CAD." |
+| 0:12 to 0:35 | Phone: start screen, "Make custom robot grippers". The guided camera: the sheet's outline and the arrows move with each shot, scissors closed and flat on the sheet. | "Put the tool on a printed sheet and follow the camera. The squares give every photo its scale and its position." |
+| 0:35 to 0:55 | The progress screen as each stage lights up, ending on "Custom grippers". Lower thirds: Muse Spark, SAM 3.1, SAM 3D. | "Muse Spark plans the scan. SAM 3.1 finds the scissors in every photo, and SAM 3D builds their whole shape. Every size comes from the photos." |
+| 0:55 to 1:15 | Result: the Original tab (the photo), then the Model tab (the scissors in 3D), the size card. | "Measured, not guessed." |
+| 1:15 to 1:40 | The Grippers tab, the jaw opening and closing the blades; the card: 26° to 26°, clear. | "Then it designs the gripper. It finds the screw the scissors turn on and puts it on the gripper's own hinge, so the blades open exactly as far as the jaw. Each finger loop snaps into a clip made for it." |
+| 1:40 to 2:00 | `sim_three_quarter.mp4`, then `sim_side.mp4`. | "Tested in simulation first: 25.8 degrees of jaw, 25.8 degrees of blade, and nothing collides." |
+| 2:00 to 2:15 | The print screen, "Print the custom grippers", open in Bambu Studio; a time-lapse of the parts printing. | "Two parts, straight to the printer." |
+| 2:15 to 2:45 | Hands unscrew the stock jaw, screw on the new parts and snap the scissors in. The arm cuts the card, taught once with the leader arm and replayed. | "Unscrew two parts, screw on two new ones, snap the scissors in. Teach it once, and it cuts." |
+| 2:45 to 3:00 | Numbers card, the Meta models card, the URL and "Beta". | "A first prototype: the SO-101 and scissors for now. Built on Muse Spark, SAM 3.1 and SAM 3D. Try it at the link." |
 
-Say "designed from the scan, tested in simulation, first prototype". The rail the simulation
-calls for (pointing at the scissors' pivot) is not printed yet: tonight's moving jaw uses a
-loose tie instead, which is the same idea with slack.
+## Numbers card (the live run on the real scissors, f684f76b871f)
+
+- Scissors: 153 x 58 x 10 mm, from SAM 3D fitted to 16 photos.
+- Pivot: the screw found in the photo from above, 3.4 mm radius, 0.3 mm off the tool's axis.
+- Simulation: gripper 25.8°, blades 25.8°, 0 mm3 of collision between parts and blades.
+- Clips: 1.8 mm walls with a 0.45 mm snap lip, sized to each loop.
+- Time: 6 minutes from photos to printable grippers; the gripper design itself takes seconds.
+
+## Lines to avoid
+
+- Don't say the robot sees the scissors or plans its own cut: the motion is taught and replayed.
+- Don't say pliers or any other tool works yet; the copy says scissors for now.
+- Don't call it printed and proven until the clips have held real scissors.
+- Don't say it is part of bevell.app; it is built for it and shares no code.
 
 ---
 
+## Earlier direction: scan to CAD to robot fixture (B-roll and fallback)
+
+The rest of this file is the first plan, kept for B-roll and as a fallback if the grippers
+are not ready to film.
 
 The story in one line: **photos in, CAD out: measured, editable, printable, and ready for a
 robot.** Every claim on screen is one we measured; the numbers are in the README.
 
-## Before recording
+### Before recording (fixture demo)
 
 - **Sheet:** print `assets/bevell_capture_sheet.pdf` on A4 at 100% ("actual size", not "fit").
   A marker square should measure 22 mm with a ruler.
@@ -59,7 +103,7 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
   Spark writes the tree, then 160 builds a round tune it against the photos): start it before
   filming the Fusion shot, or cut the wait in the edit.
 
-## Shots
+### Shots
 
 | Time | On screen | Voice-over |
 |---|---|---|
@@ -72,7 +116,7 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
 | 2:15 to 2:40 | "Open in Bambu Studio" from the print screen; a time-lapse of the holder printing; the part drops into its holder. Then the two fixtures: the overlay shows tag 40 found and the jaws planned through the finger reliefs; the SO-101 picks the servo with its fitted pads and sets it down in the fixture with tag 41. | "One tap sends a holder to the printer: rounded rim, lead-in, no supports. And the same scan makes fixtures a robot can use: finger reliefs where its jaws go, a tag that tells its camera where the part sits, and the grasp written out. Print it twice and you have a pick-and-place station from one scan." |
 | 2:40 to 3:00 | Numbers card, then the Meta models card, then the URL. | "Tested on scanned objects with known true shapes and on the mistakes people make with photos. Built on Meta's Muse Spark, SAM 3.1 and SAM 3D. Try it: link below." |
 
-## Ready-made shots
+### Ready-made shots
 
 - `docs/images/robot_pick.png`: the scanned bracket in its fixture, rendered from a robot's
   camera, with the tag found and the planned pick drawn (jaws through the finger reliefs,
@@ -90,11 +134,11 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
   "Not a mesh: real CAD") and `out/broll/servo_fixture.mp4` (the fixture with the servo seated
   and the tag in its recess: under the robot lines). Any scan folder works as its argument.
 - The examples on the start screen cover each kind: Vitamin bottle and Tape roll (revolve),
-  Bracket (sketch + extrude from the scan), Hobby servo, Gear, Mug and Alarm clock (smooth
-  NURBS, each with Muse Spark's tree: the mug's handle, the gear's teeth), Mario and Fish
+  Bracket (sketch + extrude from the scan), Hobby servo, Gear and Mug (smooth NURBS, each
+  with Muse Spark's tree: the mug's handle, the gear's teeth), Mario and Fish
   (smooth NURBS). Every example has its holder, pads and robot fixture.
 
-## Numbers card (from the README, checked before recording)
+### Numbers card (from the README, checked before recording)
 
 - Camera positions: 0.2 to 0.3 mm.
 - Sizes: within 2 mm on 12 of 15 objects; editable CAD within 1 to 2 mm of the true surface.
@@ -104,7 +148,7 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
 - Photo mistakes: 13 of 13 user tests pass. Blurred, dark, tiny, huge, rotated, HEIC, PNG and
   one-sided sets come out within 2.5 mm; photos from one spot are refused with a reason.
 
-## Lines to avoid
+### Lines to avoid
 
 - Don't promise accuracy under a millimetre for the object itself; the cameras are that good,
   the shapes are within one to two.

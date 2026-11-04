@@ -1,13 +1,15 @@
 # Bevell 3D
 
 Photos of an object on a printed sheet in. A true-size 3D model, editable CAD, a holder
-to print and gripper pads for a robot arm out. Built for the Meta Global AI Developer
-Hackathon (27 Oct to 4 Nov 2026).
+to print and gripper pads for a robot arm out. Photograph a pair of scissors and it designs
+custom grippers for the SO-101 arm instead (beta): new jaw parts with the scissors' pivot on
+the gripper's hinge and a snap clip for each finger loop, tested in MuJoCo. Built for the
+Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 
 ## What is new in this hackathon
 
-Everything in this repository was written during the hackathon (27 Oct to 4 Nov 2026). It
-is built for [Bevell](https://bevell.app), an existing product that turns photos and scans
+Everything in this repository was written during the hackathon (27 Oct to 4 Nov 2026), from
+2 to 4 Nov: the first commit is 3 Nov 2026, 00:36 UTC. It is built for [Bevell](https://bevell.app), an existing product that turns photos and scans
 into 2D CAD, but it uses none of Bevell's code or services: Bevell's own code is not here and
 is not part of this submission. Joining the two later means calling this service from Bevell,
 or Bevell's public API from here, never sharing code.
