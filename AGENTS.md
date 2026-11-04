@@ -274,6 +274,51 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     SAM 3D 67, fit 26, CAD and holder 14).
   - Bottle: 59 s in all (revolved, no SAM 3D).
 
+## Prismatic parts, scan checks and the robot fixture (4 Nov)
+
+- **Prismatic route** (`cad.prismatic_cad`, tried after the revolve): the solid sliced every
+  millimetre, slices grouped into at most 4 levels whose outline does not change (a run under
+  3% of the height is a transition and joins its neighbours), each level a polygon extruded to
+  its height, round holes as true circles, a hole through several levels as one feature. Kept
+  only when it differs from the solid by under 10% of the volume. It writes `model_tree.json`
+  and `model_fusion.zip` (level heights and hole diameters as parameters), and the result
+  screen says the CAD is already editable.
+  - Designed test parts (`tools/make_parts.py`): bracket, L-bracket, gear, sloped stand. On
+    their exact meshes the bracket is 2 levels and 3 holes, the gear 2 levels and a bore, both
+    within 0.2% by volume; the stand is refused.
+  - From the bracket's scan: 2 levels (9.3 and 20.7 mm, true 8 and 22) and 3 holes, 0.93 mm
+    from the true surface, 63.6 cm3 (true 65.2). Tuning the levels against the photos was tried
+    (1.16 mm, but 11 minutes and still four levels) and left out.
+  - On hulls the route is often refused: a visual hull cannot carve beside a step, so slices
+    taper. Real prismatic scans then go to NURBS, and "Make it editable" gives the designer's
+    tree (the agent read the bracket as a flange, an offset tower, a bore and two holes).
+- **Shells** (`cad.solidify`): SAM 3D can return walls open underneath with slits (the mouse:
+  31.9 cm3 of a 186 cm3 solid). With the sheet as a floor and gaps to 6.5 mm closed, enclosed
+  space is filled, only when that cavity is 30% of the mesh or more (mouse 2.26, every other
+  object 0.0). The runner and recad fill before writing model.stl.
+- **Scan checks** (`scan.py`):
+  - `object_mask` joins SAM 3.1 instances that touch the best one: the letter holder came back
+    as two, and one photo's mask without the back compartment cut 26 mm off the hull.
+  - `check_coverage` refuses photos all taken from one spot (within 25 degrees) before any
+    masks; `check_bounded` refuses a shape that runs off the top or reaches the squares.
+  - The carve reaches 250 mm and keeps only what rests on the sheet (`hull.on_sheet`, thin
+    necks joined): the 160 mm ceiling cut the 162 mm clock, and a higher ceiling alone grew a
+    floating tower over every object.
+  - An unreadable photo is left out and named in the report (`photos/unreadable.json`).
+- **Robot fixture** (`bevell3d/fixture.py`, every scan): finger reliefs on the grasp's squeeze
+  axis sized from the SO-101 pads, a tab with a 30 mm recess for a printed ArUco tag (4x4, id
+  40; `tag.pdf` marks the edge to stick towards the part), and `fixture.json` with the pick in
+  the marker's own frame. `tools/pick_preview.py` finds the tag in a camera image and draws the
+  pick. Tests: valid fixture, the tag found at its size, the pose 300 mm away within 3 mm.
+- **recad:** `python -m bevell3d.run --recad --out <scan>` makes a finished scan's outputs
+  again with today's code (CAD, holders, pads, fixture), no new photos or model calls.
+- **User tests** (`tools/user_tests.py`, real pipeline): minimum 8 photos, one side only,
+  blurred, dark, 640 px, 48 MP, rotated by EXIF, PNG and HEIC all come out within 2.5 mm;
+  sixteen copies of one photo and photos with no sheet are refused with what to do; a broken
+  photo is skipped. API tests (`tests/test_webapp.py`, 23) cover the passcode, the cap, photo
+  limits, file types, ids and path traversal.
+- **Demo:** `docs/DEMO.md` (script and shots), `docs/SUBMISSION.md` (form answers).
+
 ## Smooth NURBS for freeform scans (4 Nov)
 
 - `bevell3d/nurbs.py`: a freeform model's STEP is smooth Bezier patches, not flat triangles.
