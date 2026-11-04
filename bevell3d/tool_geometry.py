@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 import trimesh
 from shapely.geometry import Point, Polygon, LineString
+from shapely.ops import unary_union
 
 RES = 0.1          # mm per pixel of the flattened photo
 
@@ -132,6 +133,11 @@ def shown_model(outline, info, pivot, toward, sam=None, reach=400.0):
         for g in getattr(region, "geoms", [region]):
             if g.area > 1.0:
                 m = trimesh.creation.extrude_polygon(g.buffer(0), th); m.apply_translation((0, 0, z0)); parts.append(m)
+    # The handles as one solid with moulded edges: a flat extrusion of the traced outline shows
+    # its every pixel step.
+    if parts:
+        handles = trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
+        parts = [round_solid(handles)]
     if sam is not None:
         # SAM 3D's own screw (the highest bump within 15 mm of the found pivot) moved onto the
         # pivot, then its blades stretched along the axis to the outline's tip: on the real pair
@@ -191,3 +197,75 @@ def tool_halves_cut(outline, info, pivot, toward, cl=0.4, reach=400.0):
                     m = trimesh.creation.extrude_polygon(piece, hi - lo + 2 * cl); m.apply_translation((0, 0, lo - cl)); parts.append(m)
         out[side] = trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
     return out
+
+
+def round_solid(mesh, sigma_mm=0.7, pitch=0.25):
+    """`mesh` with every edge rounded like a moulding, for showing only: voxels at `pitch`, a
+    Gaussian of `sigma_mm`, then the half level as a surface. It stays within about sigma of the
+    original, inside the clearance the clips leave. Returns the mesh unchanged if anything fails."""
+    try:
+        from scipy.ndimage import gaussian_filter
+        from skimage.measure import marching_cubes
+        from .blend import _occupancy
+        pad = 3 * sigma_mm + 2 * pitch
+        lo = mesh.bounds[0] - pad; hi = mesh.bounds[1] + pad
+        shape = tuple(int(np.ceil(v)) for v in (hi - lo) / pitch)
+        occ = _occupancy(mesh, lo, shape, pitch).astype(np.float32)
+        f = gaussian_filter(occ, sigma_mm / pitch)
+        v, faces, _, _ = marching_cubes(f, 0.5)
+        out = trimesh.Trimesh(lo + (v + 0.5) * pitch, faces[:, ::-1], process=True)
+        if len(out.faces) > 120000:
+            try:
+                out = out.simplify_quadric_decimation(face_count=120000)
+            except Exception:
+                pass
+        return out if len(out.faces) else mesh
+    except Exception:
+        return mesh
+
+
+def footprint(mesh, res=0.2):
+    """A mesh's shadow on the sheet from straight above, holes included, as a shapely polygon."""
+    from shapely.geometry import Polygon as P
+    lo = mesh.bounds[0][:2] - 2; hi = mesh.bounds[1][:2] + 2
+    W, H = (int(np.ceil(v)) for v in (hi - lo) / res)
+    im = np.zeros((H, W), np.uint8)
+    tri = ((mesh.vertices[mesh.faces][:, :, :2] - lo) / res).round().astype(np.int32)
+    cv2.fillPoly(im, list(tri), 255)
+    cs, hier = cv2.findContours(im, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    polys = []
+    for i, c in enumerate(cs):
+        if hier[0][i][3] != -1 or len(c) < 3:
+            continue
+        holes = [cs[j][:, 0, :] * res + lo for j in range(len(cs)) if hier[0][j][3] == i and len(cs[j]) >= 3]
+        polys.append(P(c[:, 0, :] * res + lo, holes).buffer(0))
+    return max(polys, key=lambda g: g.area) if polys else None
+
+
+def composite_outline(outline, sam, pivot, toward, agree=0.85, min_ring=4.0, reach=400.0):
+    """The tool's outline with SAM 3D's handles behind the pivot and the photos' in front, when the
+    two agree on the handles' outside (filled shapes, IoU >= `agree`) and differ only inside. The
+    masks of clear plastic handles fill most of each finger hole (on a real pair the photos' holes
+    were 355 mm2 where the handles' inner edges in the photo, and SAM 3D, gave about 590); SAM 3D
+    sees through them. In front of the pivot the photos win: SAM 3D's blade stopped 16 mm short.
+    None when they disagree outside, so an object SAM 3D got wrong keeps the photos' outline."""
+    from shapely.geometry import Polygon as P, box as sbox
+    from shapely import affinity
+    f = footprint(sam)
+    if f is None:
+        return None
+    p = np.asarray(pivot, float); a = np.asarray(toward, float) / np.linalg.norm(toward)
+    ang = np.degrees(np.arctan2(a[1], a[0]))
+    back = affinity.translate(affinity.rotate(sbox(-reach, -reach, 0, reach), ang, origin=(0, 0)), p[0], p[1])
+    front = affinity.translate(affinity.rotate(sbox(0, -reach, reach, reach), ang, origin=(0, 0)), p[0], p[1])
+    fill = lambda g: unary_union([P(x.exterior) for x in getattr(g, "geoms", [g]) if not x.is_empty]) if not g.is_empty else g
+    sb, ob = fill(f.intersection(back)), fill(outline.intersection(back))
+    if sb.is_empty or ob.is_empty or sb.intersection(ob).area / sb.union(ob).area < agree:
+        return None
+    # SAM 3D's holes (not its raster specks), kept `min_ring` inside the photos' outside edge: on
+    # one loop SAM 3D's hole crowded the edge and left a 2.4 mm ring, thinner than any moulding.
+    holes = [P(r) for r in getattr(f, "interiors", []) if P(r).area > 20.0]
+    inner = ob.buffer(-min_ring, 32)
+    handles_part = ob.difference(unary_union([h.intersection(inner) for h in holes])).intersection(back)
+    comp = unary_union([handles_part, outline.intersection(front)]).buffer(0.05).buffer(-0.05)
+    return max(getattr(comp, "geoms", [comp]), key=lambda g: g.area)

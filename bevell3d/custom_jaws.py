@@ -175,6 +175,20 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     # What the preview and the simulation show: SAM 3D's model when the scan made one (it keeps
     # the thin blades), else the outline extruded to the measured thickness.
     shown = os.path.join(scan_dir, "sam3d_fitted.stl")
+    # The finger holes from SAM 3D when it agrees with the photos on the handles' outside: the
+    # masks of low-contrast (clear) handles fill most of each hole. The outside edge and the
+    # blades stay the photos'.
+    holes_from = "photos"
+    if os.path.exists(shown):
+        from .tool_geometry import composite_outline
+        comp = composite_outline(outline, trimesh.load(shown), pivot, toward)
+        if comp is not None:
+            try:
+                info2 = handles(mesh, p, outline=comp)
+                if all(h["loop"] for h in info2["handles"]):
+                    outline, info, holes_from = comp, info2, "sam3d"
+            except Exception:
+                pass
     # Each loop's thickness: the smaller of the carved shape's and SAM 3D's at the loop. The carved
     # shape only ever comes out too thick (it is an outer bound), and on a real pair one loop
     # carved at 8.1 mm where SAM 3D and the other loop said 6.6: a clip built for 8.1 holds
@@ -261,7 +275,7 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     sm, sf = side_of(cen[km]), side_of(cen[1 - km])
     half_m = sc.slice_plane(pv, V * np.sign(sm), cap=True)
     half_f = sc.slice_plane(pv, V * np.sign(sf), cap=True)
-    report = {"pivot_on_hinge": True, "pivot_found": pivot_how, "scissors_plane_y_mm": round(float(y_mid), 1), "loops": "forward" if loops_forward else "back",
+    report = {"pivot_on_hinge": True, "pivot_found": pivot_how, "finger_holes_from": holes_from, "scissors_plane_y_mm": round(float(y_mid), 1), "loops": "forward" if loops_forward else "back",
               "side": "left" if side < 0 else "right", "flipped": flip,
               "moving_loop": km, "arm_mm": {"moving": round(dm, 1), "fixed": round(df, 1)}, "clips": reps,
               "parts": {"moving_jaw": {"faces": len(new_moving.faces), "watertight": bool(new_moving.is_watertight), "volume_cm3": round(new_moving.volume / 1000, 2)},
