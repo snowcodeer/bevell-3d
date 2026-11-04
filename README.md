@@ -54,9 +54,9 @@ photos on the capture sheet
 
 ## Measured
 
-**Fourteen objects with known true shapes**: nine scanned household objects from Google
-Scanned Objects and four parts we designed (a bracket, an L-bracket, a gear and a sloped
-stand), photographed on the capture sheet in Blender (16 photos each) and run through the
+**Fifteen objects with known true shapes**: ten scanned household objects from Google
+Scanned Objects and five parts we designed (a bracket, an L-bracket, a gear, a sloped stand
+and a hobby servo, the robot demo's part), photographed on the capture sheet in Blender (16 photos each) and run through the
 whole pipeline with real model calls, then scored against the true meshes
 (`tools/bench_table.py`):
 
@@ -76,8 +76,9 @@ whole pipeline with real model calls, then scored against the true meshes
 | Letter holder | NURBS | 2.4 | 4.8 | 0.41 | |
 | Fish toothbrush holder | NURBS | 1.3 | 4.4 | 0.74 | |
 | White mouse | NURBS | 6.4 | 1.5 | 1.6 | 2.2 |
+| Hobby servo | NURBS | 1.6 | 0.9 | 0.29 | |
 
-- Camera positions within 0.2 to 0.3 mm (median). Size within 2 mm on 11 of 14 objects.
+- Camera positions within 0.2 to 0.3 mm (median). Size within 2 mm on 12 of 15 objects.
 - "Model to truth" is the mean distance from the true surface. Open insides a camera cannot
   carve from outside (the mug, the letter holder's compartments, the fish's cup) cost 3 to 5
   mm; Muse Spark's feature tree models the mug's inside and comes to 1.8.

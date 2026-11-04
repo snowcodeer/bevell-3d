@@ -318,6 +318,16 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     necks joined): the 160 mm ceiling cut the 162 mm clock, and a higher ceiling alone grew a
     floating tower over every object.
   - An unreadable photo is left out and named in the report (`photos/unreadable.json`).
+- **The servo (the robot demo's part):** `tools/make_parts.py servo`, rendered and run like
+  the other parts (`out/bench/servo/closer`). Muse Spark routes it freeform; SAM 3D's model is
+  kept (agreement 0.923 against the hull's 0.947, within the margin), size within 1.6 mm, 0.91
+  mm from the true surface (the hull is 0.68), CAD smooth NURBS. The hull is too soft for the
+  prismatic route on a part this small: case 7% wide, ears smeared over 25 to 31 mm, holes
+  not carved, the hub tapered (6 levels). Muse Spark's tree is the editable CAD: case, ears at
+  27.0 mm, ⌀12.5 boss 10.2 off-centre, four holes, 12 parameters, 0.59 mm from the truth, in
+  29 minutes for 3 rounds (the app runs 2). A build is 0.3 s, so the time is Muse Spark's.
+  The fixture grips the case across its 19.7 mm side, 20.5 mm up, below the ears; rendered,
+  the pick lands 3.1 mm from the truth at 31 cm (`docs/images/servo_pick.png`).
 - **Looking closer** (`scan.look_closer`): a small object seen low down can be too few
   pixels for SAM 3.1. On the 42 mm servo, with the whole sheet in view, it found nothing in
   all eight low photos, with any prompt; the same photo cropped round the servo gave it at
