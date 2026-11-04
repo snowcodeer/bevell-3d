@@ -89,8 +89,8 @@ whole pipeline with real model calls, then scored against the true meshes
 route's, build the same body in Fusion and in CadQuery, within 0.6% in volume and 0.45 mm in
 size, and both refuse the same impossible one (`tools/fusion_e2e.py`, through the BevellBridge
 add-in). The sixteenth, Muse Spark's richer mouse, is a spline loft 0.65 mm apart on 128 mm
-(volume +0.6%): the two kernels draw a closed spline through the same points a little
-differently between them.
+(volume +0.5%): Fusion's and OpenCascade's smooth lofts interpolate differently between
+sections.
 
 **Smooth NURBS:** Mario's 1,464 patches lie 0.06 mm from the scan and 0.93 mm from the true
 figure (the scan itself is 0.92), and open in Fusion as one solid.

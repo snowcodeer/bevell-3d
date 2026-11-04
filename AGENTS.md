@@ -383,8 +383,9 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   error or more than 3% volume or 0.5 mm size apart. Results in `out/fusion_e2e.json`.
   - **4 Nov: 15 of 16 pass**, the four new trees (Muse Spark's bracket, gear and L-bracket,
     the bracket's prismatic tree) within 0.01 mm. The richer mouse is 0.65 mm apart on a 128 mm
-    spline loft: CadQuery spaces closed-spline parameters evenly (its lofts need it to match
-    Fusion's volume), Fusion its own way. A fillet with no matching edges is skipped with a
+    six-section spline loft, volume +0.5%. Not the sketches: feeding Fusion CadQuery's own
+    spline sampled densely changed nothing (0.70 mm). The two kernels' smooth lofts interpolate
+    differently between sections, and the widest point falls between them. A fillet with no matching edges is skipped with a
     warning in both kernels. BevellBridge serves a thread per request and restarts its loop:
     on 4 Nov its server thread died and the port stayed open with nobody accepting.
   - **3 Nov, Fusion 2706.1.17: all six pass**, volume within 0.6% and size within 0.44 mm of
