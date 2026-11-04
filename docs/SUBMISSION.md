@@ -13,7 +13,7 @@ Due 4 Nov 2026, 9pm ET (02:00 UK, Thu 5 Nov).
 
 **Project description**
 
-Bevell 3D turns about fifteen phone photos into measured CAD. Put an object on a printed sheet
+Bevell 3D turns eleven guided phone photos into measured CAD. Put an object on a printed sheet
 of markers, follow the guided camera, and get back a true-size model as STEP and STL: sketch and
 extrude for prismatic parts, a revolve for turned ones, smooth NURBS surfaces for freeform ones,
 an editable feature tree Muse Spark writes on request, and a holder that opens in Bambu Studio
@@ -60,7 +60,9 @@ none of its services for the pipeline. The README says so at the top.
   give the tool its outline from above, finger loops included.
 - **SAM 3D Objects** (open weights, on Modal L40S GPUs): builds the full shape from one photo,
   including the sides no photo sees. We scale and place it by the measured silhouettes. The
-  scissors in the gripper demo are SAM 3D's model, fitted at 153 x 58 x 10 mm.
+  scissors in the gripper demo are SAM 3D's model, fitted at 153 x 58 x 10 mm. On scissors with
+  clear plastic handles the masks filled the finger holes; SAM 3D saw them, so the grippers take
+  the photos' outside edge and SAM 3D's holes.
 
 **Why are Meta's models important to your solution?**
 
