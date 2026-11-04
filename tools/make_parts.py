@@ -59,9 +59,55 @@ def servo():
     return case.union(ears).union(hub)
 
 
+def sts3215():
+    """A Feetech STS3215, the SO-101's own servo, as sold (horns loose in the bag): a black
+    45.2 x 24.7 x 35 mm case standing on its base, a low boss with the brass output spline
+    over one end of the top face, four screw heads in the top's corners, and the cable's
+    strain relief out of the far end."""
+    case = cq.Workplane("XY").rect(45.2, 24.7).extrude(35).edges("|Z").fillet(1.0)
+    x = 45.2 / 2 - 11.5
+    boss = cq.Workplane("XY").workplane(offset=35).center(x, 0).circle(5.5).extrude(1.5)
+    spline = cq.Workplane("XY").workplane(offset=36.5).center(x, 0).circle(2.9).extrude(3.5)
+    screws = cq.Workplane("XY").workplane(offset=35).pushPoints(
+        [(sx * (45.2 / 2 - 2.6), sy * (24.7 / 2 - 2.6)) for sx in (-1, 1) for sy in (-1, 1)]).circle(1.6).extrude(0.6)
+    cable = cq.Workplane("YZ").workplane(offset=-45.2 / 2 - 4).center(0, 8).rect(9, 4).extrude(4)
+    return case.union(boss).union(spline).union(screws).union(cable)
+
+
+def pliers():
+    """Slip-joint pliers lying flat, a stand-in hand tool for the tool-dock demo: tapered jaws,
+    a round pivot, two handles splaying from it, 165 mm long and 11 mm thick."""
+    from shapely.geometry import Polygon, Point
+    from shapely.ops import unary_union
+    jaws = Polygon([(0, -3), (0, 3), (46, 8.5), (46, -8.5)])
+    pivot = Point(52, 0).buffer(11.5, 32)
+    handle = lambda s: Polygon([(56, s * 1.0), (58, s * 11.0), (165, s * 27.0), (165, s * 15.0)])
+    outline = unary_union([jaws, pivot, handle(1), handle(-1)]).buffer(1.2).buffer(-1.2).simplify(0.05)
+    return cq.Workplane("XY").polyline(list(outline.exterior.coords)[:-1]).close().extrude(11)
+
+
+def scissors():
+    """Paper scissors lying flat, closed, a stand-in for the tool-fingers demo: blades tapering
+    to a point, a pivot, and two finger loops of different sizes; 160 mm long, 7 mm thick."""
+    from shapely.geometry import Polygon, Point
+    from shapely.affinity import scale as sscale
+    from shapely.ops import unary_union
+    blades = Polygon([(0, -1.0), (0, 1.0), (88, 8.0), (88, -8.0)])
+    pivot = Point(88, 0).buffer(8, 32)
+    ring = lambda cx, cy, ax, ay, ix, iy: sscale(Point(cx, cy).buffer(1, 64), ax, ay).difference(sscale(Point(cx, cy).buffer(1, 64), ix, iy))
+    loops = [ring(140, 15, 20, 13, 14, 8), ring(136, -16, 17, 12, 11.5, 7.5)]
+    shanks = [Polygon([(90, 3), (92, 9), (123, 15), (122, 6)]), Polygon([(90, -3), (92, -9), (121, -16), (121, -6)])]
+    shape = unary_union([blades, pivot, *loops, *shanks]).buffer(0.8).buffer(-0.8)
+    wp = cq.Workplane("XY").polyline(list(shape.exterior.coords)[:-1]).close()
+    for hole in shape.interiors:
+        wp = wp.polyline(list(hole.coords)[:-1]).close()
+    return wp.extrude(7)
+
+
 PARTS = {"bracket": (bracket, "0.80,0.25,0.15"), "l_bracket": (l_bracket, "0.15,0.35,0.75"),
          "gear": (gear, "0.85,0.55,0.10"), "wedge_stand": (wedge_stand, "0.20,0.55,0.30"),
-         "servo": (servo, "0.07,0.07,0.08")}
+         "servo": (servo, "0.07,0.07,0.08"), "sts3215": (sts3215, "0.03,0.03,0.035"),
+         "pliers": (pliers, "0.78,0.12,0.10"), "scissors": (scissors, "0.10,0.30,0.80")}
 
 
 def main(names=None):

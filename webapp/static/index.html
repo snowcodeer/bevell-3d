@@ -258,6 +258,12 @@ body.camopen { overflow: hidden; }
         <div class="facts" id="p-facts"></div>
         <p class="muted small">PLA, no supports.<span id="p-dfm"></span><span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
       </div>
+      <div class="card" id="tool-card" hidden>
+        <h3>Robot fingers for this tool</h3>
+        <p class="muted small">Two saddles shaped to the tool's handles. Tape one inside each SO-101 jaw near the tip, set the gripper to the jaw gap below, and zip-tie each handle in through the notches (through the finger loop on scissors). The gripper's own close and open now close and open the tool.</p>
+        <div class="facts" id="tool-facts"></div>
+        <div class="examples" id="tool-links"></div>
+      </div>
       <div class="card" id="pads-card" hidden>
         <h3>Gripper pads</h3>
         <p class="muted small">Stick them on the SO-101's jaws. It then holds this object by its own shape.</p>
@@ -576,7 +582,7 @@ async function resultScreen(id) {
   $("r-plan").innerHTML = planHTML(s.plan);
   const T = s.timings_s || {}, L = { plan: "Muse Spark", photos: "photos", markers: "squares", masks: "SAM 3.1", hull: "shape", revolve: "profile", sam3d: "SAM 3D", fit: "fit", cad_and_holder: "CAD + holder", total: "total" };
   $("times").innerHTML = Object.entries(T).map(([k, v]) => `<span>${L[k] || k} ${v.toFixed(0)} s</span>`).join("");
-  actions(button("Print the holder", "primary", () => go("print", id)), button("New scan", "ghost", () => { files = []; go("sheet"); }));
+  actions(button(s.tool_fingers ? "Print the tool fingers" : "Print the holder", "primary", () => go("print", id)), button("New scan", "ghost", () => { files = []; go("sheet"); }));
   const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
   viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"]);
   agentCard(id, st);
@@ -623,6 +629,13 @@ async function printScreen(id) {
   const made = [has("top_fillet_mm") && "rounded rim", has("lead_in_chamfer_mm") && "lead-in", has("foot_chamfer_mm") && "chamfered foot"].filter(Boolean);
   $("p-dfm").textContent = made.length ? ` ${made.join(", ").replace(/^./, (c) => c.toUpperCase())}.` : "";
   $("files").innerHTML = st.files.map((x) => `<a href="${x.url}" download>${esc(x.label)}<span>${x.name.split(".").pop().toUpperCase()}</span></a>`).join("");
+  $("tool-card").hidden = !f["tool_fingers.3mf"];
+  if (f["tool_fingers.3mf"]) {
+    const tf = s.tool_fingers || {};
+    $("tool-facts").innerHTML = tf.jaw_gap_mm ? `<div class="fact"><b>${tf.jaw_gap_mm.toFixed(1)} mm</b><span>jaw gap, tool closed</span></div><div class="fact"><b>${tf.grip_mm.map((w) => w.toFixed(1)).join(" + ")} mm</b><span>${tf.loops ? "finger-loop rings" : "handles"} gripped</span></div>` : "";
+    $("tool-links").innerHTML = (COARSE ? "" : `<a class="chip" href="${bambu(f["tool_fingers.3mf"])}">Open in Bambu Studio</a>`) + `<a class="chip" href="${f["tool_fingers.3mf"]}" download>Download 3MF</a>`
+      + (f["tool_fingers.json"] ? `<a class="chip" href="${f["tool_fingers.json"]}" download>Fit JSON</a>` : "");
+  }
   $("pads-card").hidden = !f["pads.3mf"];
   $("fixture-card").hidden = !f["fixture.3mf"];
   if (f["fixture.3mf"]) {

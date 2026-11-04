@@ -132,6 +132,23 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
         summary["fixture"] = {"tag_id": fx["tag"]["id"], "grasp_mm": fx["grasp"]["centre_mm"], "relief_mm": fx["fixture"]["relief_mm"]}
     except Exception as e:
         summary["fixture_error"] = f"{type(e).__name__}: {e}"
+    # A hand tool lying flat (scissors, pliers): fingers that let the SO-101 hold it and work it.
+    # Only for flat objects, so the handle of a mug seen from above never reads as two handles.
+    if float(final.extents[2]) <= 0.2 * float(max(final.extents[:2])):
+        try:
+            from .tool_fingers import write_tool_fingers, top_outline
+            vpath = os.path.join(out_dir, "views.pkl")
+            outline = None
+            if os.path.exists(vpath):
+                vp = pickle.load(open(vpath, "rb"))
+                outline = top_outline(vp["views"], vp["masks"], float(final.bounds[1][2]) / 2)
+            tf = write_tool_fingers(out_dir, final, outline=outline)
+            summary["tool_fingers"] = {"jaw_gap_mm": tf["jaw_gap_tool_closed_mm"], "grip_mm": [s["width_mm"] for s in tf["saddles"]],
+                                       "loops": all(s["loop"] for s in tf["saddles"]), "outline_from": tf["outline_from"]}
+        except ValueError:
+            pass                                   # no two handles side by side: not a tool
+        except Exception as e:
+            summary["tool_fingers_error"] = f"{type(e).__name__}: {e}"
     timings["total"] = round(time.time() - t0, 1)
     summary["timings_s"] = timings
     progress("done", "ready")
