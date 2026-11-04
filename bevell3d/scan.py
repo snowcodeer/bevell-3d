@@ -115,6 +115,41 @@ def look_closer(prepared, views, masks, prompt, size, workers=4):
         return {v["name"]: m for v, m in zip(missing, pool.map(one, missing)) if m is not None}
 
 
+COLOUR_WORDS = {"dark", "light", "pale", "bright", "matte", "glossy", "black", "white", "grey", "gray", "silver",
+                "gold", "red", "orange", "yellow", "green", "blue", "navy", "teal", "purple", "pink", "brown", "beige",
+                "cream", "tan", "olive", "maroon", "turquoise", "cyan", "magenta", "charcoal", "metallic"}
+
+
+def fallback_prompts(prompt):
+    """Plainer prompts to try when Muse Spark's name finds too little: its colour words with
+    'object', then 'object'. A wrong or too-specific name finds nothing at all: a stand-in for
+    the SO-101's servo, named 'dark gray lego brick', was found in none of 16 photos, where
+    'dark gray object' found it at 0.93."""
+    colour = []
+    for w in prompt.lower().split():
+        if w.strip(",-") not in COLOUR_WORDS:
+            break
+        colour.append(w.strip(",-"))
+    out = [" ".join(colour + ["object"]), "object"]
+    return [q for i, q in enumerate(out) if q != prompt.lower() and q not in out[:i]]
+
+
+def masks_with_fallback(prepared, prompt, cache_path, share=0.75):
+    """SAM 3.1 masks for Muse Spark's prompt, or for a plainer one when that finds the object
+    in under `share` of the photos: whichever finds it in the most. Returns (masks, prompt)."""
+    masks = masks_for(prepared, prompt, cache_path)
+    found = sum(m is not None for m in masks.values())
+    used = prompt
+    for alt in fallback_prompts(prompt):
+        if found >= share * len(prepared):
+            break
+        alt_masks = masks_for(prepared, alt, cache_path)
+        n = sum(m is not None for m in alt_masks.values())
+        if n > found:
+            masks, used, found = alt_masks, alt, n
+    return masks, used
+
+
 def camera_centres(views):
     out = []
     for v in views:
@@ -165,7 +200,13 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
     check_coverage(views)
     timings["markers"] = round(time.time() - t, 1); t = time.time()
     progress("masks", f"{len(views)} cameras placed; SAM 3.1 is cutting the object out")
-    masks = masks_for([(n, p) for n, p, _ in prepared if n in posed], prompt, os.path.join(out_dir, "masks.pkl"))
+    masks, used = masks_with_fallback([(n, p) for n, p, _ in prepared if n in posed], prompt, os.path.join(out_dir, "masks.pkl"))
+    if used != prompt:
+        progress("masks", f"SAM 3.1 found more with '{used}' than with '{prompt}'")
+    if sum(m is not None for m in masks.values()) < 3:
+        raise ValueError(f"SAM 3.1 could not find the object in the photos (asked for '{prompt}', then '{used}'). "
+                         "Make sure it stands out from the white sheet: put a coloured card under a white or pale object.")
+    prompt = used
     closer = look_closer(prepared, views, masks, prompt, size)
     if closer:
         progress("masks", f"found the object in {len(closer)} more photos by looking closer")
@@ -182,6 +223,7 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
         "photos": len(prepared), "posed": len(views),
         "skipped": sorted({n for n, _, _ in prepared} - {v["name"] for v in views}),
         "looked_closer": sorted(closer),
+        "sam_prompt": prompt,
         "unreadable": json.load(open(os.path.join(out_dir, "photos", "unreadable.json"))) if os.path.exists(os.path.join(out_dir, "photos", "unreadable.json")) else [],
         "focal_px": round(float(K[0, 0]), 1), "calibration_rms_px": None if rms is None else round(rms, 3),
         "marker_error_px": {v["name"]: round(v["err_px"], 2) for v in views},

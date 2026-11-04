@@ -74,3 +74,40 @@ def test_photos_where_sam_finds_nothing_are_looked_at_again_closer(tmp_path, mon
     assert np.all(ext > np.array([30.0, 20.0, 40.0]) - 0.75) and np.all(ext < np.array([30.0, 20.0, 40.0]) + 3.5), ext
     for name in low:                                          # each recovered mask sits on the true outline
         assert rep["agreement"][name] > 0.85, rep["agreement"]
+
+
+def test_a_name_sam_cannot_find_falls_back_to_a_plainer_prompt(tmp_path, monkeypatch):
+    """Muse Spark named a stand-in for the SO-101's servo 'dark gray lego brick', and SAM 3.1
+    found it in none of 16 photos; 'dark gray object' found it at 0.93. The scan tries the
+    plainer prompt and keeps the one that finds the object in more photos."""
+    box = trimesh.creation.box((45.0, 25.0, 35.0))
+    box.apply_translation((150, 100, 17.5))
+    K_full = K_TRUE.copy(); K_full[:2] *= FULL
+    full_size = (SIZE[0] * FULL, SIZE[1] * FULL)
+    paths, truth = [], {}
+    for k, c in enumerate(CAMS):
+        R, t = look_at(c)
+        v_full = {"rv": cv2.Rodrigues(R)[0], "tv": t.reshape(3, 1), "K": K_full}
+        img = photo(K_full, R, t, full_size, seed=k)
+        img[silhouette(box, v_full, full_size)] = 40
+        p = str(tmp_path / f"IMG_{k:02d}.jpg")
+        cv2.imwrite(p, img)
+        paths.append(p)
+        truth[f"IMG_{k:02d}"] = {"rv": v_full["rv"], "tv": v_full["tv"], "K": K_TRUE}
+    asked = []
+
+    def fake_sam(path, prompt):
+        asked.append(prompt)
+        name = os.path.basename(path)[:-4]
+        return None if prompt == "dark gray lego brick" or name not in truth else silhouette(box, truth[name], SIZE)
+    monkeypatch.setattr(scan_mod, "object_mask", fake_sam)
+    mesh, rep = scan_mod.scan(paths, "dark gray lego brick", str(tmp_path / "out"))
+    assert rep["sam_prompt"] == "dark gray object" and "object" not in asked, (rep["sam_prompt"], set(asked))
+    assert rep["posed"] == len(CAMS), rep
+    ext = np.array(rep["extents_mm"])
+    assert np.all(ext > np.array([45.0, 25.0, 35.0]) - 0.75) and np.all(ext < np.array([45.0, 25.0, 35.0]) + 3.5), ext
+    # Found nowhere, under any prompt: a clear message, not a complaint about the photos.
+    monkeypatch.setattr(scan_mod, "object_mask", lambda path, prompt: None)
+    import pytest
+    with pytest.raises(ValueError, match="could not find the object"):
+        scan_mod.scan(paths, "dark gray lego brick", str(tmp_path / "out2"))
