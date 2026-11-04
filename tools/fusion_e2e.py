@@ -51,7 +51,10 @@ def cases():
     for name, path in (("bottle (Muse Spark)", "out/bench/bottle/timed/agent_tree.json"), ("mouse (Muse Spark)", "out/bench/mouse/full/agent_tree.json"),
                        ("lens (Muse Spark)", "out/bench/camera/full/agent_tree.json"), ("mug (Muse Spark)", "out/bench/mug/tree/agent_tree.json"),
                        ("clock (Muse Spark)", "out/bench/clock/full/agent_tree.json"), ("mouse, richer brief", "out/bench/mouse/rich/agent_tree.json"),
-                       ("clock, richer brief", "out/bench/clock/rich/agent_tree.json")):
+                       ("clock, richer brief", "out/bench/clock/rich/agent_tree.json"),
+                       ("bracket (Muse Spark)", "out/bench/bracket/full/agent_tree.json"), ("gear (Muse Spark)", "out/bench/gear/full/agent_tree.json"),
+                       ("L-bracket (Muse Spark)", "out/bench/l_bracket/full/agent_tree.json"),
+                       ("bracket, prismatic CAD from the scan", "out/bench/bracket/full/model_tree.json")):
         try:
             out.append((name, json.load(open(path))))
         except FileNotFoundError:

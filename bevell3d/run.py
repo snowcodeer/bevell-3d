@@ -148,6 +148,9 @@ def recad(out_dir, log=print):
     summary = json.load(open(os.path.join(out_dir, "summary.json")))
     plan = json.load(open(os.path.join(out_dir, "plan.json"))) if os.path.exists(os.path.join(out_dir, "plan.json")) else summary["plan"]
     final, hull = trimesh.load(os.path.join(out_dir, "model.stl")), trimesh.load(os.path.join(out_dir, "hull.stl"))
+    from .cad import solidify
+    final, summary["solidified"] = solidify(final)       # scans from before the fill was added
+    final.export(os.path.join(out_dir, "model.stl"))
     for stale in ("model_tree.json", "model_fusion.zip"):
         if os.path.exists(os.path.join(out_dir, stale)):
             os.remove(os.path.join(out_dir, stale))
