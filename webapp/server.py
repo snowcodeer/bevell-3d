@@ -228,7 +228,35 @@ def scan_status(scan_id: str, request: Request):
     base = str(request.base_url).rstrip("/")
     st["files"] = [{"name": n, "label": l, "url": f"{base}/api/scans/{scan_id}/files/{n}"}
                    for n, (l, _) in FILES.items() if os.path.exists(os.path.join(res, n))]
+    if _photo_path(scan_id, st):
+        st["photo"] = f"{base}/api/scans/{scan_id}/photo"
     return JSONResponse(st)
+
+
+def _photo_path(scan_id, st=None):
+    """One photo of the object as it was taken, for the viewer's Original tab: the one SAM 3D
+    rebuilt it from when it did, else the middle of the set (a side view, not the first from above)."""
+    d = os.path.join(SCANS, scan_id, "result", "photos")
+    if not os.path.isdir(d):
+        return None
+    names = sorted(n for n in os.listdir(d) if n.lower().endswith((".jpg", ".jpeg", ".png")))
+    if not names:
+        return None
+    used = (((st or {}).get("summary") or {}).get("sam3d") or {}).get("photo")
+    for n in names:
+        if used and os.path.splitext(n)[0] == used:
+            return os.path.join(d, n)
+    return os.path.join(d, names[len(names) // 2])
+
+
+@app.get("/api/scans/{scan_id}/photo")
+def scan_photo(scan_id: str):
+    if not ID.match(scan_id) or not os.path.exists(os.path.join(SCANS, scan_id, "status.json")):
+        raise HTTPException(404, "No scan with that id.")
+    p = _photo_path(scan_id, json.load(open(os.path.join(SCANS, scan_id, "status.json"))))
+    if not p:
+        raise HTTPException(404, "No photo kept for that scan.")
+    return FileResponse(p, media_type="image/png" if p.endswith(".png") else "image/jpeg")
 
 
 @app.get("/api/scans/{scan_id}/files/{name}")
@@ -266,11 +294,16 @@ def start_agent(scan_id: str, request: Request):
     return {"ok": True}
 
 
+# Kept on the volume but not offered: the clock's hull beat its SAM 3D model on agreement and
+# came out a blob that looks nothing like the photos.
+HIDDEN_EXAMPLES = {"example-clock"}
+
+
 @app.get("/api/examples")
 def examples():
     out = []
     for d in sorted(os.listdir(SCANS)) if os.path.isdir(SCANS) else []:
-        if d.startswith("example-") and os.path.exists(os.path.join(SCANS, d, "status.json")):
+        if d.startswith("example-") and d not in HIDDEN_EXAMPLES and os.path.exists(os.path.join(SCANS, d, "status.json")):
             st = json.load(open(os.path.join(SCANS, d, "status.json")))
             out.append({"id": d, "name": st.get("title", d)})
     return out
