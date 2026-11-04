@@ -103,7 +103,8 @@ photos cropped so the sheet is gone, are refused with what to do instead. 13 of 
 path traversal).
 
 **Robot fixture:** the printed tag is found by a camera at its id and size, and its pose 300 mm
-away within 3 mm (`tests/test_fixture.py`, `tools/pick_preview.py`).
+away within 3 mm (`tests/test_fixture.py`, `tools/pick_preview.py`). The tag PDF's second
+page is tag 41, for a second print of the fixture as the place station.
 
 ## Run it
 

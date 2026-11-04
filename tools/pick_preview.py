@@ -1,8 +1,9 @@
 """Where the robot will pick: find the fixture's tag in a camera image and draw the planned grasp.
 
-    .venv/bin/python -m tools.pick_preview photo.jpg fixture.json [--focal-px 1500] [--out pick.jpg]
+    .venv/bin/python -m tools.pick_preview photo.jpg fixture.json [--focal-px 1500] [--out pick.jpg] [--tag-id 41]
 
-Prints the grasp in the camera's frame (mm). A robot controller composes that with its own
+Prints the grasp in the camera's frame (mm). `--tag-id 41` finds the place fixture instead (the
+second print, with the tag from tag.pdf's second page); the part sits the same in either. A robot controller composes that with its own
 camera-to-base calibration; this tool needs only the camera's focal length (estimated from the
 image width if not given, which is enough for a preview, not for a pick).
 """
@@ -10,9 +11,9 @@ import argparse, json
 import numpy as np, cv2
 
 
-def find_tag(img, rep, K):
-    """(rvec, tvec) of the fixture's tag, in mm, or None."""
-    tag = rep["tag"]
+def find_tag(img, rep, K, tag_id=None):
+    """(rvec, tvec) of the fixture's tag (or of `tag_id`), in mm, or None."""
+    tag = {**rep["tag"], "id": rep["tag"]["id"] if tag_id is None else tag_id}
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX      # depth hangs on the corners
     det = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, tag["dictionary"])), params)
@@ -26,13 +27,13 @@ def find_tag(img, rep, K):
     return (rvec, tvec) if ok else None
 
 
-def preview(img, rep, focal_px=None):
+def preview(img, rep, focal_px=None, tag_id=None):
     h, w = img.shape[:2]
     f = focal_px or 1.1 * w
     K = np.array([[f, 0, w / 2], [0, f, h / 2], [0, 0, 1.0]])
-    pose = find_tag(img, rep, K)
+    pose = find_tag(img, rep, K, tag_id)
     if pose is None:
-        raise ValueError(f"tag {rep['tag']['id']} is not in the image")
+        raise ValueError(f"tag {rep['tag']['id'] if tag_id is None else tag_id} is not in the image")
     rvec, tvec = pose
     g = rep["grasp"]
     c = np.array(g["centre_mm"]); s = np.array(g["squeeze_axis"]); half = g["jaw_closed_on_part_mm"] / 2
@@ -56,7 +57,8 @@ def preview(img, rep, focal_px=None):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("image"); ap.add_argument("fixture"); ap.add_argument("--focal-px", type=float); ap.add_argument("--out", default="pick.jpg")
+    ap.add_argument("--tag-id", type=int, help="the place fixture's tag (41) instead of the pick fixture's")
     a = ap.parse_args()
-    out, info = preview(cv2.imread(a.image), json.load(open(a.fixture)), a.focal_px)
+    out, info = preview(cv2.imread(a.image), json.load(open(a.fixture)), a.focal_px, a.tag_id)
     cv2.imwrite(a.out, out)
     print(json.dumps(info, indent=1))

@@ -17,6 +17,7 @@ from .cad import HolderParams, holder_cad, footprint, to_mesh
 from .gripper import PadParams, grasp_frame
 
 TAG_DICT, TAG_ID, TAG_MM, TAB_MM = "DICT_4X4_50", 40, 30.0, 38.0
+PLACE_TAG_ID = 41      # a second print of the same fixture, for pick and place
 
 
 def fixture_cad(mesh, pad=PadParams(), hp=HolderParams(), tag_id=TAG_ID):
@@ -60,7 +61,9 @@ def fixture_cad(mesh, pad=PadParams(), hp=HolderParams(), tag_id=TAG_ID):
     report = {
         "tag": {"dictionary": TAG_DICT, "id": tag_id, "size_mm": TAG_MM,
                 "frame": "the marker's own (OpenCV): origin at its centre, x to its right, y to its top edge (towards the part), z up; mm",
-                "stick": "top edge of the printed tag towards the part"},
+                "stick": "top edge of the printed tag towards the part",
+                "place_id": PLACE_TAG_ID,
+                "place": "print the fixture twice and stick this tag in the second for a place fixture: the grasp is the same in its frame"},
         "grasp": {"centre_mm": to_tag(grasp_pt), "squeeze_axis": squeeze, "approach": [0.0, 0.0, -1.0],
                   "jaw_open_mm": round(width + 2 * (pad.thickness + 8.0), 1),
                   "jaw_closed_on_part_mm": round(width + 2 * (pad.clearance + pad.thickness), 1),
@@ -76,12 +79,15 @@ def fixture_cad(mesh, pad=PadParams(), hp=HolderParams(), tag_id=TAG_ID):
     return solid, report
 
 
-def tag_pdf(path, tag_id=TAG_ID, size_mm=TAG_MM, dpi=600):
-    """The tag on an A4 page at exact size, with its id printed under it."""
-    tag_page(tag_id, size_mm, dpi).save(path, "PDF", resolution=dpi)
+def tag_pdf(path, tag_id=TAG_ID, size_mm=TAG_MM, dpi=600, place_id=PLACE_TAG_ID):
+    """The tag on an A4 page at exact size, with its id printed under it; then, unless
+    `place_id` is None, the place fixture's tag on a second page."""
+    pick = tag_page(tag_id, size_mm, dpi, "Pick fixture")
+    more = [tag_page(place_id, size_mm, dpi, "Place fixture: a second print of the same fixture")] if place_id is not None else []
+    pick.save(path, "PDF", resolution=dpi, save_all=True, append_images=more)
 
 
-def tag_page(tag_id=TAG_ID, size_mm=TAG_MM, dpi=600):
+def tag_page(tag_id=TAG_ID, size_mm=TAG_MM, dpi=600, role=None):
     import cv2
     from PIL import Image, ImageDraw
     px = int(round(size_mm / 25.4 * dpi))
@@ -95,6 +101,8 @@ def tag_page(tag_id=TAG_ID, size_mm=TAG_MM, dpi=600):
     d.polygon([(cx, top - int(6 / 25.4 * dpi)), (cx - int(4 / 25.4 * dpi), top), (cx + int(4 / 25.4 * dpi), top)], fill=0)
     d.text((cx + int(6 / 25.4 * dpi), top - int(5 / 25.4 * dpi)), "this edge towards the part", fill=0)
     d.text((x0, y0 + px + int(4 / 25.4 * dpi)), f"Bevell fixture tag {TAG_DICT} id {tag_id}, {size_mm:.0f} mm. Print at 100%, cut on the grey line.", fill=0)
+    if role:
+        d.text((x0, y0 + px + int(8 / 25.4 * dpi)), role, fill=0)
     return page
 
 

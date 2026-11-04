@@ -18,18 +18,22 @@ def test_a_fixture_has_reliefs_on_the_squeeze_axis_and_the_pick_in_the_tag_frame
     for f in ("fixture.step", "fixture.stl", "fixture.3mf", "fixture.json", "tag.pdf"):
         assert (tmp_path / f).exists(), f
     assert trimesh.load(tmp_path / "fixture.stl").is_watertight
-    assert open(tmp_path / "tag.pdf", "rb").read(4) == b"%PDF"
+    pdf = open(tmp_path / "tag.pdf", "rb").read()
+    import re
+    assert pdf[:4] == b"%PDF" and len(re.findall(rb"/Type\s*/Page(?![s\w])", pdf)) == 2      # pick tag, place tag
+    assert rep["tag"]["id"] == 40 and rep["tag"]["place_id"] == 41
 
 
-def test_the_printed_tag_is_found_by_a_camera_with_its_id_and_size():
+def test_the_printed_tags_are_found_by_a_camera_with_their_ids_and_size():
     import cv2
-    from bevell3d.fixture import tag_page, TAG_ID, TAG_DICT, TAG_MM
-    page = np.asarray(tag_page(dpi=300))
+    from bevell3d.fixture import tag_page, TAG_ID, PLACE_TAG_ID, TAG_DICT, TAG_MM
     det = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, TAG_DICT)))
-    corners, ids, _ = det.detectMarkers(page)
-    assert ids is not None and ids.ravel().tolist() == [TAG_ID]
-    side = np.linalg.norm(corners[0][0][0] - corners[0][0][1])
-    assert abs(side / (TAG_MM / 25.4 * 300) - 1) < 0.015, side          # corners sit a hair outside the edge
+    for tag_id in (TAG_ID, PLACE_TAG_ID):
+        page = np.asarray(tag_page(tag_id, dpi=300, role="Place fixture"))
+        corners, ids, _ = det.detectMarkers(page)
+        assert ids is not None and ids.ravel().tolist() == [tag_id]
+        side = np.linalg.norm(corners[0][0][0] - corners[0][0][1])
+        assert abs(side / (TAG_MM / 25.4 * 300) - 1) < 0.015, side      # corners sit a hair outside the edge
 
 
 def test_the_pick_preview_finds_the_tag_where_the_camera_sees_it():
@@ -53,6 +57,14 @@ def test_the_pick_preview_finds_the_tag_where_the_camera_sees_it():
     out, info = preview(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), rep, focal_px=f)
     assert abs(info["tag_distance_mm"] - np.linalg.norm(tvec)) < 3, info
     assert out.shape == (H, W, 3)
+    # The place fixture's tag is looked for only when asked, and found the same way.
+    with pytest.raises(ValueError, match="tag 41"):
+        preview(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), rep, focal_px=f, tag_id=41)
+    place = cv2.copyMakeBorder(cv2.aruco.generateImageMarker(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, TAG_DICT)), 41, 400),
+                               40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
+    img41 = cv2.warpPerspective(place, cv2.getPerspectiveTransform(src, uv.reshape(-1, 2).astype(np.float32)), (W, H), borderValue=255)
+    _, info41 = preview(cv2.cvtColor(img41, cv2.COLOR_GRAY2BGR), rep, focal_px=f, tag_id=41)
+    assert abs(info41["tag_distance_mm"] - info["tag_distance_mm"]) < 0.5, info41
 
 
 @pytest.mark.skipif(not os.path.exists("/Applications/Blender.app/Contents/MacOS/Blender"), reason="needs Blender")

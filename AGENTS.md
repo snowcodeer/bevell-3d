@@ -317,6 +317,9 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   40; `tag.pdf` marks the edge to stick towards the part), and `fixture.json` with the pick in
   the marker's own frame. `tools/pick_preview.py` finds the tag in a camera image and draws the
   pick. Tests: valid fixture, the tag found at its size, the pose 300 mm away within 3 mm.
+  - Pick and place: `tag.pdf`'s second page is tag 41. Print the fixture twice and stick 41 in
+    the second; the part sits the same in either frame, so the place pose is the grasp in
+    tag 41's frame (`pick_preview --tag-id 41`). `fixture.json` names it as `tag.place_id`.
 - **recad:** `python -m bevell3d.run --recad --out <scan>` makes a finished scan's outputs
   again with today's code (CAD, holders, pads, fixture), no new photos or model calls.
 - **User tests** (`tools/user_tests.py`, real pipeline): minimum 8 photos, one side only,
