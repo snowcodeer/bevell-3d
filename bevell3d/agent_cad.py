@@ -275,10 +275,13 @@ def ask(messages, key=None, timeout=600, mode="tree"):
         r.raise_for_status()
         choice = r.json()["choices"][0]; msg = choice["message"]
         if msg.get("content"):
-            return json.loads(msg["content"]), msg
+            try:
+                return json.loads(msg["content"]), msg
+            except json.JSONDecodeError:            # a reply cut off mid-string (the clock, 4 Nov): ask again
+                continue
         if choice.get("finish_reason") != "length":
             raise RuntimeError(f"Muse Spark returned no content ({choice.get('finish_reason')}, refusal {msg.get('refusal')!r})")
-    raise RuntimeError(f"Muse Spark reasoned through all {limit} tokens without answering")
+    raise RuntimeError(f"Muse Spark gave no usable answer within {limit} tokens")
 
 
 def measured_sections(mesh, centre, n_levels=6, n_pts=8):
