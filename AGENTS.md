@@ -237,9 +237,12 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 
 - `modal_app/web.py` (Modal app `bevell-3d`): the same FastAPI server, one container (4 CPU,
   8 GiB), Blender 5.0.1 for the NURBS step, SAM 3D called on `bevell-sam3d` as locally.
-- Scans live in the Volume `bevell-3d-scans`, committed every 15 s. The seven examples were
-  put there with `modal volume put --force bevell-3d-scans out/scans/example-<name> /example-<name>`
-  after `python -m tools.seed_examples`; redeploy afterwards so the container sees them.
+- Scans live in the Volume `bevell-3d-scans`, committed every 15 s. The eight examples
+  (`SHOWN` in `tools/seed_examples.py`) are put there with
+  `modal volume put --force bevell-3d-scans out/scans/example-<name> /example-<name>` after
+  `python -m tools.seed_examples`. **Then stop the web container** (`modal container list`,
+  `modal container stop -y <id>`): a redeploy that changes no code keeps the warm container,
+  whose view of the volume predates the upload, so new files stay invisible (4 Nov).
 - Secrets: `bevell-3d-meta` (the Meta key, from `.env.meta`) and `bevell-3d-access`
   (`BEVELL3D_PASSCODE`). **The passcode is not written in this repo**; Natalie has it. A
   scan or an agent run needs it (header `x-passcode`, a field on the photo check screen), and
