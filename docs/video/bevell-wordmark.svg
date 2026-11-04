@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1"
+     width="31.0129mm" height="4.2mm"
+     viewBox="-15.4501 -2.1 31.0129 4.2">
+  <title>BEVELL wordmark — refined geometry — white</title>
+  <defs>
+    <!-- Exact master E: reused for both Es -->
+    <path id="letter-e" d="M 4.55 -2.10
+      V -1.25 H 1.55
+      Q 1.10 -1.25 1.10 -0.80
+      V -0.425 H 3.50 V 0.40 H 1.10 V 0.80
+      Q 1.10 1.25 1.55 1.25
+      H 4.55 V 2.10 H 1.20
+      Q 0 2.10 0 0.85
+      V -0.90
+      Q 0 -2.10 1.20 -2.10 Z"/>
+
+    <!-- Exact master L: reused for both Ls -->
+    <path id="letter-l" d="M 0 -2.10 H 1.20 V 0.82
+      Q 1.20 1.25 1.63 1.25
+      H 3.85 V 2.10 H 1.10
+      Q 0 2.10 0 1.00 Z"/>
+  </defs>
+
+  <g fill="#FFFFFF" stroke="none">
+    <!-- B, cleaned to remove accidental micro-chamfers/slants -->
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M -15.45 -2.10 H -11.60
+      C -10.90 -2.10 -10.50 -1.65 -10.50 -1.00
+      C -10.50 -0.55 -10.70 -0.25 -11.00 -0.08
+      C -10.60 0.10 -10.30 0.45 -10.30 0.95
+      C -10.30 1.65 -10.80 2.10 -11.55 2.10
+      H -15.45 Z
+      M -14.30 -1.25 H -12.10
+      C -11.80 -1.25 -11.60 -1.05 -11.60 -0.80
+      C -11.60 -0.55 -11.80 -0.40 -12.10 -0.40
+      H -14.30 Z
+      M -14.30 0.38 H -12.00
+      C -11.65 0.38 -11.45 0.58 -11.45 0.85
+      C -11.45 1.10 -11.65 1.25 -12.00 1.25
+      H -14.30 Z"/>
+
+    <!-- E masters are mathematically identical -->
+    <use href="#letter-e" transform="translate(-9.59 0)"/>
+
+    <!-- V rebuilt around an exact vertical symmetry axis -->
+    <path d="M -4.50 -2.10 H -3.35
+      L -1.57 0.90
+      L 0.21 -2.10 H 1.36
+      L -1.08 1.95
+      Q -1.22 2.10 -1.42 2.10
+      H -1.72
+      Q -1.92 2.10 -2.06 1.95 Z"/>
+
+    <use href="#letter-e" transform="translate(1.74 0)"/>
+
+    <!-- Both Ls use one identical master path -->
+    <use href="#letter-l" transform="translate(7.10 0)"/>
+    <use href="#letter-l" transform="translate(11.70 0)"/>
+  </g>
+</svg>
