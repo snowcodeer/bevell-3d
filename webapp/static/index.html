@@ -343,7 +343,7 @@ const STAGES = [
   ["sam3d", "Generating the full shape"], ["fit", "Sizing it"], ["cad", "CAD and holder"],
 ];
 const ROUTE = { flat: "Flat part", revolved: "Round, turned shape", freeform: "Freeform shape" };
-const CAD = { revolved: "Editable profile", lofted: "Editable sections", mesh: "Mesh in STEP" };
+const CAD = { revolved: "Editable profile", lofted: "Editable sections", nurbs: "Smooth NURBS", mesh: "Mesh in STEP" };
 const planHTML = (p) => `<div class="small muted">Muse Spark</div><div><span class="tag">${ROUTE[p.route] || esc(p.route)}</span>${esc(p.object)}</div>
   ${p.photo_issues?.length ? `<ul class="issues">${p.photo_issues.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}`;
 let polling;

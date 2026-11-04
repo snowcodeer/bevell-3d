@@ -123,6 +123,15 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
         import cadquery as cq
         from .cad import to_cad, holder_cad_safe, to_mesh, write_dxf
         solid, kind, info, why = to_cad(final, plan["route"])
+        if kind == "mesh":
+            # Freeform: smooth NURBS patches instead of the mesh's flat triangles, when they work.
+            progress("cad", "smoothing the CAD surface")
+            try:
+                from .nurbs import scan_to_nurbs
+                solid, info = scan_to_nurbs(os.path.join(out_dir, "model.stl"))
+                kind = "nurbs"
+            except Exception as e:                   # the triangle STEP still stands; say why
+                why["nurbs"] = f"{type(e).__name__}: {e}"
         cq.exporters.export(cq.Workplane().add(solid), os.path.join(out_dir, "model.step"))
         to_mesh(solid).export(os.path.join(out_dir, "model_cad.stl"))   # what the viewer shows
         summary["cad"] = {"kind": kind, "info": {k: v for k, v in info.items() if not isinstance(v, dict)},

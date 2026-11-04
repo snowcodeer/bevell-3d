@@ -258,6 +258,25 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     SAM 3D 67, fit 26, CAD and holder 14).
   - Bottle: 59 s in all (revolved, no SAM 3D).
 
+## Smooth NURBS for freeform scans (4 Nov)
+
+- `bevell3d/nurbs.py`: a freeform model's STEP is smooth Bezier patches, not flat triangles.
+  QuadriFlow (in a background Blender, `BLENDER` overrides the path) quad-remeshes the scan,
+  about one quad per 10 mm² (800 to 4,000); each quad becomes a bicubic patch approximating
+  the Catmull-Clark surface (Loop and Schaefer 2008); the cage is moved so the surface passes
+  through the scan (without it Mario came out 4% small); the patches share their boundaries
+  and sew into one solid.
+- Measured: Mario 1,464 patches, 0.06 mm from its scan, 0.93 mm from the true figure (the
+  scan itself is 0.92); the clock 3,121 patches, 0.11 mm from its scan but 3.04 mm from the
+  truth against the scan's 2.62 (thin parts soften). Fusion opens Mario as one solid in 2.6 s.
+- QuadriFlow needs a closed manifold mesh: a hollow SAM 3D shell goes through `clean_body`;
+  over 120,000 faces it is voxel-remeshed inside Blender first (decimating in trimesh broke
+  manifoldness and QuadriFlow failed on all three objects); at some densities it leaves a hole
+  (the mouse at 3,000), so it retries at 60% and 35%.
+- `run.py` uses it when `to_cad` falls back to a mesh (kind `nurbs`, "Smooth NURBS" in the
+  web app), and keeps the triangle STEP if it fails. It adds 60 to 135 s. A deploy needs
+  Blender in the image.
+
 ## CAD agent and feature tree (3 Nov)
 
 - **`bevell3d/feature_tree.py`** is the CAD-neutral model. It holds named parameters, and
