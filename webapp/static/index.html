@@ -296,6 +296,10 @@ body.camopen { overflow: hidden; }
       <div class="grid" id="grid"></div>
       <p class="muted small">Remove blurry ones.</p>
       <label class="pass" id="pass-row" hidden>Passcode<input id="pass" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="pass" id="key-row" hidden><span id="key-label">Your Meta Model API key, or a Bevell API key (Bevell Unlimited)</span>
+        <input id="own-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <span class="small">Used only for this scan and never stored on our server. This tab forgets it when you close it.</span>
+        <span class="small"><a href="https://bevell.app/pricing" target="_blank" rel="noopener">Get Bevell Unlimited</a>, then make a key at <a href="https://bevell.app/developers" target="_blank" rel="noopener">bevell.app/developers</a>.</span></label>
       <p class="err" id="up-err" hidden></p>
     </section>
 
@@ -645,21 +649,52 @@ function reviewScreen() {
   actions(button("Make my CAD", "primary", upload, n < 8 || n > 40), button("Add more", "ghost", () => go("shoot")));
 }
 // Deployed, a run needs the passcode the server asks for; it is remembered on this device.
-let cfg = { passcode: false };
-fetch("/api/config").then((r) => r.json()).then((c) => { cfg = c; $("pass-row").hidden = !c.passcode; }).catch(() => {});
+// Or the visitor's own Meta Model API key, or a Bevell Unlimited subscriber's Bevell API key (bvl_...,
+// checked by the server): kept in this tab only (sessionStorage), sent with each run.
+let cfg = { passcode: false, byok: false };
+fetch("/api/config").then((r) => r.json()).then((c) => {
+  cfg = c; $("pass-row").hidden = !c.passcode; $("key-row").hidden = !c.byok;
+}).catch(() => {});
+const KEY_LABEL = "Your Meta Model API key, or a Bevell API key (Bevell Unlimited)";
 const remembered = () => { try { return localStorage.getItem("bevell3d-pass") || ""; } catch { return ""; } };
 $("pass").value = remembered();
-const passHeader = () => ({ "x-passcode": $("pass").value.trim() || remembered() });
+const KEY_STORE = "bevell3d-own-key", KEY_FORM = /^[\x21-\x7e]{8,512}$/;   // as the server checks it
+try { $("own-key").value = sessionStorage.getItem(KEY_STORE) || ""; } catch {}
+$("own-key").addEventListener("input", () => {
+  try { const k = $("own-key").value.trim(); k ? sessionStorage.setItem(KEY_STORE, k) : sessionStorage.removeItem(KEY_STORE); } catch {}
+});
+const accessHeaders = () => {
+  const h = { "x-passcode": $("pass").value.trim() || remembered() }, k = $("own-key").value.trim();
+  if (k) h["x-model-api-key"] = k;
+  return h;
+};
+const KEY_BAD = "That API key doesn't look right. Paste it again, with no spaces.";
+const keyLooksWrong = () => { const k = $("own-key").value.trim(); return k && !KEY_FORM.test(k); };
+// The same two fields again, for a run started from the result screen (the agent).
+function accessFields() {
+  const box = document.createElement("div"); box.className = "gets";
+  const copy = (src, label) => {
+    const l = document.createElement("label"); l.className = "pass"; l.textContent = label;
+    const i = src.cloneNode(); i.removeAttribute("id"); i.value = src.value;
+    i.addEventListener("input", () => { src.value = i.value; src.dispatchEvent(new Event("input")); });
+    l.append(i); box.append(l);
+  };
+  if (cfg.passcode) copy($("pass"), "Passcode");
+  if (cfg.byok) copy($("own-key"), KEY_LABEL);
+  return box;
+}
 async function upload() {
   $("up-err").hidden = true;
+  if (keyLooksWrong()) { $("up-err").textContent = KEY_BAD; $("up-err").hidden = false; $("own-key").focus(); return; }
   const btn = $("actions").querySelector(".primary"); btn.disabled = true; btn.textContent = "Uploading…";
   const fd = new FormData(); files.forEach((f) => fd.append("photos", f, f.name)); fd.append("mode", mode);
   let msg;
   try {
-    const r = await fetch("/api/scans", { method: "POST", body: fd, headers: passHeader() }); const j = await r.json();
+    const r = await fetch("/api/scans", { method: "POST", body: fd, headers: accessHeaders() }); const j = await r.json();
     if (r.ok) { try { localStorage.setItem("bevell3d-pass", $("pass").value.trim()); } catch {} go("making", j.id); return; }
     msg = j.detail || "The upload failed.";
-    if (r.status === 401) { $("pass-row").hidden = false; $("pass").focus(); }
+    if (r.status === 401) { $("pass-row").hidden = false; $("key-row").hidden = !cfg.byok; $("pass").focus(); }
+    if (/API key|Bevell/.test(msg)) $("own-key").focus();
   } catch (e) { msg = "The upload failed. Check your connection and try again."; }
   $("up-err").textContent = msg; $("up-err").hidden = false; btn.disabled = false; btn.textContent = "Make my CAD";
 }
@@ -807,9 +842,14 @@ function agentCard(id, st) {
   card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>Turn it into features you can edit</b>
     ${a?.state === "failed" ? `<span class="err small">Didn't work: ${esc(a.error)}</span>` : `<span class="muted small">About 5 minutes. Checked against your photos.</span>`}`;
   const b = button("Make it editable", "ghost", async () => {
+    if (keyLooksWrong()) { b.textContent = KEY_BAD; return; }
     b.disabled = true;
-    const r = await fetch(`/api/scans/${id}/agent`, { method: "POST", headers: passHeader() });
-    if (!r.ok) { const j = await r.json().catch(() => ({})); b.textContent = j.detail || "Couldn't start. Try again."; b.disabled = false; return; }
+    const r = await fetch(`/api/scans/${id}/agent`, { method: "POST", headers: accessHeaders() });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({})); b.textContent = j.detail || "Couldn't start. Try again."; b.disabled = false;
+      if ([400, 401, 402].includes(r.status) && !card.querySelector(".pass")) card.insertBefore(accessFields(), b);
+      return;
+    }
     const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; agentCard(id, nst);
   });
   card.append(b);
