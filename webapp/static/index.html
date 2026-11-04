@@ -97,9 +97,16 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 .fact.wide { grid-column: 1 / -1; }
 .card .fact { background: var(--card-2); }
 .files { display: grid; gap: 8px; }
-.files a { display: flex; justify-content: space-between; align-items: center; padding: 13px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--fg); text-decoration: none; font-size: 14px; }
-.files a span { color: var(--muted); font-size: 12px; }
-.files a:hover { border-color: var(--accent); }
+.files details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.files summary { list-style: none; cursor: pointer; padding: 13px 14px; display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; }
+.files summary::-webkit-details-marker { display: none; }
+.files summary span { color: var(--muted); font-weight: 500; font-size: 12px; }
+.files summary::after { content: "+"; color: var(--muted); font-weight: 500; margin-left: 10px; }
+.files details[open] summary::after { content: "–"; }
+.files .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 14px; }
+.files .chips a { font: 600 13px var(--body); padding: 8px 12px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--line); color: var(--fg); text-decoration: none; }
+.files .chips a i { font-style: normal; color: var(--muted); font-weight: 500; margin-left: 6px; }
+.files .chips a:hover { border-color: var(--accent); }
 .times { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .err { color: var(--bad); }
 .pass { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
@@ -265,7 +272,7 @@ body.camopen { overflow: hidden; }
     </section>
 
     <section class="screen" data-screen="print">
-      <h2>Print the holder</h2>
+      <h2 id="p-title">Print the holder</h2>
       <div class="card">
         <div class="facts" id="p-facts"></div>
         <p class="muted small">PLA, no supports.<span id="p-dfm"></span><span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
@@ -632,6 +639,31 @@ function makingScreen(id) {
   tick();
 }
 
+// The downloads in a few groups, each a row of short buttons; the previews and reports the app
+// uses itself go under "Technical files", closed.
+const FILE_GROUPS = [
+  ["Custom robot grippers", { "custom_jaws.3mf": "Both parts", "custom_moving_jaw.stl": "Moving jaw", "custom_wrist_roll_follower.stl": "Wrist-roll follower", "custom_jaws_sim.xml": "MuJoCo model" }],
+  ["Model", { "model.step": "Model", "model.stl": "As scanned", "model_cad.stl": "From the CAD", "model_fusion.zip": "Fusion 360", "model_tree.json": "Feature tree" }],
+  ["Editable CAD (Muse Spark)", { "agent_model.step": "Model", "agent_fusion.zip": "Fusion 360", "agent_tree.json": "Feature tree", "agent_model.py": "Script", "agent_model.stl": "Model" }],
+  ["Holder", { "holder.3mf": "Holder", "holder.step": "Holder", "holder.stl": "Holder", "holder_top.dxf": "Outline", "holder_nest.stl": "Nest" }],
+  ["Robot fixture and pads", { "fixture.3mf": "Fixture", "fixture.step": "Fixture", "tag.pdf": "Tag", "fixture.json": "Pick", "pads.3mf": "Pads", "pad_fixed_jaw.stl": "Fixed pad", "pad_moving_jaw.stl": "Moving pad", "grasp.json": "Grasp" }],
+  ["Stick-on grippers", { "tool_fingers.3mf": "Grippers", "tool_fingers.step": "Grippers", "tool_fingers.stl": "Grippers", "tool_fingers.json": "Fit" }],
+];
+function fileGroups(files, s) {
+  const by = Object.fromEntries(files.map((x) => [x.name, x])), used = new Set(), ext = (n) => n.split(".").pop().toUpperCase();
+  const chip = (x, label) => `<a href="${x.url}" download title="${esc(x.label)}">${esc(label)}<i>${ext(x.name)}</i></a>`;
+  let first = true;
+  const groups = FILE_GROUPS.map(([title, names]) => {
+    const here = Object.keys(names).filter((n) => by[n]);
+    here.forEach((n) => used.add(n));
+    if (!here.length) return "";
+    const open = first ? " open" : ""; first = false;
+    return `<details${open}><summary>${title} <span>${here.length} file${here.length > 1 ? "s" : ""}</span></summary><div class="chips">${here.map((n) => chip(by[n], names[n])).join("")}</div></details>`;
+  }).join("");
+  const rest = files.filter((x) => !used.has(x.name));
+  return groups + (rest.length ? `<details><summary>Technical files <span>${rest.length}</span></summary><div class="chips">${rest.map((x) => chip(x, x.label.replace(/,\s*\w+$/, ""))).join("")}</div></details>` : "");
+}
+
 // ---------- result and print ----------
 async function load(id) {
   if (scan?.id === id && scan.state === "done") return scan;
@@ -734,7 +766,7 @@ async function printScreen(id) {
   const d = h.dfm || {}, has = (k) => typeof d[k] === "number";
   const made = [has("top_fillet_mm") && "rounded rim", has("lead_in_chamfer_mm") && "lead-in", has("foot_chamfer_mm") && "chamfered foot"].filter(Boolean);
   $("p-dfm").textContent = made.length ? ` ${made.join(", ").replace(/^./, (c) => c.toUpperCase())}.` : "";
-  $("files").innerHTML = st.files.map((x) => `<a href="${x.url}" download>${esc(x.label)}<span>${x.name.split(".").pop().toUpperCase()}</span></a>`).join("");
+  $("files").innerHTML = fileGroups(st.files, s);
   $("tool-card").hidden = !f["tool_fingers.3mf"];
   if (f["tool_fingers.3mf"]) {
     const tf = s.tool_fingers || {};
@@ -755,9 +787,15 @@ async function printScreen(id) {
     $("pads-facts").innerHTML = g.closed_on_object_mm ? `<div class="fact"><b>${g.closed_on_object_mm.toFixed(0)} mm</b><span>jaws closed on it</span></div><div class="fact"><b>2 pads</b><span>PLA or TPU</span></div>` : "";
     $("pads-links").innerHTML = (COARSE ? "" : `<a class="chip" href="${bambu(f["pads.3mf"])}">Open in Bambu Studio</a>`) + `<a class="chip" href="${f["pads.3mf"]}" download>Download 3MF</a>`;
   }
-  const threemf = f["holder.3mf"] || "#";
-  actions(...(COARSE ? [link("Save the 3MF", "primary", threemf, true)]
-    : [link("Open in Bambu Studio", "primary", bambu(threemf)), link("Download 3MF", "ghost", threemf, true)]));
+  // A custom-gripper result prints the two new jaw parts: they lead, and the holder card and the
+  // stick-on grippers step aside (still under All files).
+  const jaws = !!f["custom_jaws.3mf"];
+  $("p-title").textContent = jaws ? "Print the custom grippers" : "Print the holder";
+  document.querySelector('[data-screen="print"] > .card:first-of-type').hidden = jaws || !f["holder.3mf"];
+  if (jaws) $("tool-card").hidden = true;
+  const threemf = jaws ? f["custom_jaws.3mf"] : (f["holder.3mf"] || "#");
+  actions(...(COARSE ? [link(jaws ? "Save both parts (3MF)" : "Save the 3MF", "primary", threemf, true)]
+    : [link("Open in Bambu Studio", "primary", bambu(threemf)), link(jaws ? "Download both parts (3MF)" : "Download 3MF", "ghost", threemf, true)]));
 }
 
 // ---------- 3D viewer ----------
