@@ -6,7 +6,8 @@ import json, os, shutil, time
 import trimesh
 
 SCANS = "out/scans"
-TITLES = {"mario": "Mario figure", "bottle": "Vitamin bottle", "tape": "Tape roll", "mug": "Mug", "mouse": "White mouse"}
+TITLES = {"mario": "Mario figure", "bottle": "Vitamin bottle", "tape": "Tape roll", "mug": "Mug", "mouse": "White mouse",
+          "clock": "Alarm clock", "camera": "Camera lens"}
 
 
 def rebuild_holder(out, summary):
@@ -34,7 +35,7 @@ def seed(name):
               "agent_model.py": "agent_model.py", "agent_tree.json": "agent_tree.json", "agent_fusion.zip": "agent_fusion.zip", "agent_model.stl": "agent_model.stl", "agent_report.json": "agent_report.json",
               "model.stl": "model.stl", "model_cad.stl": "model_cad.stl", "model.step": "model.step", "holder.step": "holder.step",
               "holder_top.dxf": "holder_top.dxf", "plan.json": "plan.json"}
-    if src.endswith("full"):                          # made before the CAD holder was the default
+    if "cad" not in summary:                          # made before the CAD holder was the default
         cad = {c["name"]: c for c in json.load(open("out/results/cad.json"))}[name]
         copies.update({"holder_cad.stl": "holder.stl", "holder.stl": "holder_nest.stl"})
         summary["cad"] = {"kind": cad["cad_kind"], "info": cad["cad_info"]}
@@ -57,6 +58,16 @@ def seed(name):
     if os.path.isdir(f"{src}/photos"):                # the agent checks its CAD against these
         shutil.copytree(f"{src}/photos", f"{dst}/result/photos", ignore=shutil.ignore_patterns("full"))
     summary["holder"] = rebuild_holder(f"{dst}/result", summary)
+    if summary.get("cad", {}).get("kind") == "mesh":     # freeform: today's smooth NURBS STEP
+        import cadquery as cq
+        from bevell3d.nurbs import scan_to_nurbs
+        from bevell3d.cad import to_mesh
+        try:
+            solid, rep = scan_to_nurbs(f"{dst}/result/model.stl", f"{dst}/result/model.step")
+            to_mesh(solid).export(f"{dst}/result/model_cad.stl")
+            summary["cad"] = {"kind": "nurbs", "info": {k: v for k, v in rep.items() if k != "retries"}}
+        except Exception as e:
+            print("no NURBS for", name, e)
     if os.path.exists(f"{dst}/result/agent_tree.json"):   # today's Fusion script, not the one the run wrote
         from bevell3d.feature_tree import write_fusion_zip
         tree = json.load(open(f"{dst}/result/agent_tree.json"))
@@ -73,5 +84,5 @@ def seed(name):
 
 if __name__ == "__main__":
     import sys
-    for n in sys.argv[1:] or ("mario", "bottle", "tape", "mug", "mouse"):
+    for n in sys.argv[1:] or ("mario", "bottle", "tape", "mug", "mouse", "clock", "camera"):
         seed(n)
