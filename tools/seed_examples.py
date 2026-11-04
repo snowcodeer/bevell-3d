@@ -7,7 +7,9 @@ import trimesh
 
 SCANS = "out/scans"
 TITLES = {"mario": "Mario figure", "bottle": "Vitamin bottle", "tape": "Tape roll", "mug": "Mug", "mouse": "White mouse",
-          "clock": "Alarm clock", "camera": "Camera lens"}
+          "clock": "Alarm clock", "camera": "Camera lens", "bracket": "Bracket", "gear": "Gear", "fish": "Fish toothbrush holder"}
+# What the start screen shows: one of each kind (round, prismatic, freeform) and the robot part.
+SHOWN = ("bottle", "bracket", "gear", "mug", "clock", "mario", "fish", "tape")
 
 
 def rebuild_holder(out, summary):
@@ -34,6 +36,7 @@ def seed(name):
     copies = {"views.pkl": "views.pkl", "hull.stl": "hull.stl", "agent_model.step": "agent_model.step",
               "agent_model.py": "agent_model.py", "agent_tree.json": "agent_tree.json", "agent_fusion.zip": "agent_fusion.zip", "agent_model.stl": "agent_model.stl", "agent_report.json": "agent_report.json",
               "model.stl": "model.stl", "model_cad.stl": "model_cad.stl", "model.step": "model.step", "holder.step": "holder.step",
+              "model_tree.json": "model_tree.json", "model_fusion.zip": "model_fusion.zip",
               "holder_top.dxf": "holder_top.dxf", "plan.json": "plan.json"}
     if "cad" not in summary:                          # made before the CAD holder was the default
         cad = {c["name"]: c for c in json.load(open("out/results/cad.json"))}[name]
@@ -95,5 +98,5 @@ def seed(name):
 
 if __name__ == "__main__":
     import sys
-    for n in sys.argv[1:] or ("mario", "bottle", "tape", "mug", "mouse", "clock", "camera"):
+    for n in sys.argv[1:] or SHOWN:
         seed(n)
