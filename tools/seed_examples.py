@@ -7,9 +7,9 @@ import trimesh
 
 SCANS = "out/scans"
 TITLES = {"mario": "Mario figure", "bottle": "Vitamin bottle", "tape": "Tape roll", "mug": "Mug", "mouse": "White mouse",
-          "clock": "Alarm clock", "camera": "Camera lens", "bracket": "Bracket", "gear": "Gear", "fish": "Fish toothbrush holder"}
+          "clock": "Alarm clock", "camera": "Camera lens", "bracket": "Bracket", "gear": "Gear", "fish": "Fish toothbrush holder", "servo": "Hobby servo"}
 # What the start screen shows: one of each kind (round, prismatic, freeform) and the robot part.
-SHOWN = ("bottle", "bracket", "gear", "mug", "clock", "mario", "fish", "tape")
+SHOWN = ("servo", "bottle", "bracket", "gear", "mug", "clock", "mario", "fish", "tape")
 
 
 def rebuild_holder(out, summary):
@@ -28,8 +28,9 @@ def rebuild_holder(out, summary):
 
 
 def seed(name):
-    timed = f"out/bench/{name}/timed"
-    src = timed if os.path.exists(f"{timed}/summary.json") else f"out/bench/{name}/full"
+    # The run to show: timed (a clean timing run), else closer (redone with the closer look), else full.
+    src = next((f"out/bench/{name}/{t}" for t in ("timed", "closer") if os.path.exists(f"out/bench/{name}/{t}/summary.json")),
+               f"out/bench/{name}/full")
     dst = f"{SCANS}/example-{name}"
     shutil.rmtree(dst, ignore_errors=True); os.makedirs(f"{dst}/result")
     summary = json.load(open(f"{src}/summary.json"))

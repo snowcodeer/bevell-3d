@@ -8,7 +8,8 @@ from tools.bench_eval import truth_mesh, surface_distance, holder_fit, crop_to
 
 CASES = [("bottle", "timed", None), ("tape", "full", None), ("mug", "full", None), ("mario", "timed", None), ("mouse", "full", 4),
          ("clock", "full", None), ("camera", "full", None), ("bracket", "full", None), ("l_bracket", "full", None),
-         ("gear", "full", None), ("wedge_stand", "full", None), ("letters", "joined", None), ("fish", "full", None), ("android", "full", None)]
+         ("gear", "full", None), ("wedge_stand", "full", None), ("letters", "joined", None), ("fish", "full", None), ("android", "full", None),
+         ("servo", "closer", None)]
 
 
 def row(name, tag, crop):

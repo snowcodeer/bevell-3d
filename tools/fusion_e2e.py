@@ -54,6 +54,7 @@ def cases():
                        ("clock, richer brief", "out/bench/clock/rich/agent_tree.json"),
                        ("bracket (Muse Spark)", "out/bench/bracket/full/agent_tree.json"), ("gear (Muse Spark)", "out/bench/gear/full/agent_tree.json"),
                        ("L-bracket (Muse Spark)", "out/bench/l_bracket/full/agent_tree.json"),
+                       ("servo (Muse Spark)", "out/bench/servo/closer/agent_tree.json"),
                        ("bracket, prismatic CAD from the scan", "out/bench/bracket/full/model_tree.json")):
         try:
             out.append((name, json.load(open(path))))
