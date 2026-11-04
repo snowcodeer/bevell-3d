@@ -167,6 +167,65 @@ def _path_points(path, p):
     return [(a, 0.0, b) for a, b in pts] if path.get("plane", "XZ") == "XZ" else [(0.0, a, b) for a, b in pts]
 
 
+ROUND_CAP = 0.9
+EDGE_SAMPLES = 9
+
+
+def _edge_samples(e, n=EDGE_SAMPLES):
+    """Points along an edge at even steps of its parameter range."""
+    ad = e._geomAdaptor(); a, b = ad.FirstParameter(), ad.LastParameter()
+    return np.array([q.toTuple() for q in e.positions([a + t * (b - a) for t in np.linspace(0, 1, n)], mode="parameter")])
+
+
+def circumradius(a, b, c):
+    """Radius of the circle through three points; inf when they are in a line."""
+    a, b, c = (np.asarray(v, float) for v in (a, b, c))
+    ab, bc, ca = np.linalg.norm(b - a), np.linalg.norm(c - b), np.linalg.norm(a - c)
+    twice_area = np.linalg.norm(np.cross(b - a, c - a))
+    return float("inf") if twice_area < 1e-9 * max(ab, bc, ca, 1e-9) ** 2 else float(ab * bc * ca / (2 * twice_area))
+
+
+def select_edges(shape, kind):
+    """Edges picked by where they lie, by the same tests the Fusion script uses: top and bottom
+    are the edges lying at the body's highest and lowest point (within 0.01 mm), vertical the
+    edges less than a micron across in x and in y. CadQuery's own selectors go by edge type,
+    and `|Z` missed a loft's straight corner edges, which OpenCascade makes B-splines and Fusion
+    makes lines: Fusion rounded the servo's case corners and CadQuery did not."""
+    pts = [(e, _edge_samples(e)) for e in shape.Edges()]
+    if kind == "all":
+        return [e for e, _ in pts]
+    z0 = min(q[:, 2].min() for _, q in pts); z1 = max(q[:, 2].max() for _, q in pts)
+    out = []
+    for e, q in pts:
+        lo, hi = q.min(0), q.max(0)
+        if (kind == "top" and abs(lo[2] - z1) < 0.01) or (kind == "bottom" and abs(hi[2] - z0) < 0.01) \
+                or (kind == "vertical" and hi[0] - lo[0] < 1e-3 and hi[1] - lo[1] < 1e-3):
+            out.append(e)
+    return out
+
+
+def edge_radius(e):
+    """The radius of an edge through three of its points (0, 1/3 and 2/3 along): exact on an
+    arc or circle whatever type the kernel gives it, inf on a straight edge."""
+    ad = e._geomAdaptor(); a, b = ad.FirstParameter(), ad.LastParameter()
+    q = [v.toTuple() for v in e.positions([a, a + (b - a) / 3, a + 2 * (b - a) / 3], mode="parameter")]
+    return circumradius(*q)
+
+
+def cap_round(size, radii):
+    """A fillet or chamfer no larger than 0.9 of the smallest round its edges run along, and why.
+
+    Muse Spark asked for a 1.3 mm chamfer round a servo's base whose corners it had already
+    rounded at 0.71 mm. A chamfer or fillet wider than a convex round has nowhere to go: Fusion
+    refuses it, OpenCascade builds it anyway, and the two kernels disagreed. Both cap it here,
+    the same way (the Fusion script carries the same rule)."""
+    radii = [r for r in radii if math.isfinite(r)]
+    if radii and size > ROUND_CAP * min(radii):
+        new = round(ROUND_CAP * min(radii), 3)
+        return new, f"capped from {size:.2f} to {new:.2f} mm, under the {min(radii):.2f} mm round its edges run along"
+    return size, None
+
+
 def to_cadquery(tree, p):
     """Build the tree; returns (cq.Shape, warnings). A fillet or chamfer that the kernel
     refuses is skipped with a warning rather than failing the whole model."""
@@ -234,10 +293,15 @@ def to_cadquery(tree, p):
             except Exception as e:
                 warns.append(f"{s.get('id')}: shell skipped ({type(e).__name__})")
         elif op in ("fillet", "chamfer"):
-            sel = {"top": ">Z", "bottom": "<Z", "vertical": "|Z", "all": None}[s["edges"]]
             try:
-                edges = body.edges(sel) if sel else body.edges()
-                r = ev(s.get("radius", s.get("size", 1)), p)
+                picked = select_edges(body.val(), s["edges"])
+                if not picked:
+                    warns.append(f"{s.get('id')}: no {s['edges']} edges, skipped")
+                    continue
+                r, capped = cap_round(ev(s.get("radius", s.get("size", 1)), p), [edge_radius(e) for e in picked])
+                if capped:
+                    warns.append(f"{s.get('id')}: {op} {capped}")
+                edges = body.newObject(picked)
                 body = edges.fillet(r) if op == "fillet" else edges.chamfer(r)
             except Exception as e:
                 warns.append(f"{s.get('id')}: {op} skipped ({type(e).__name__})")
@@ -275,6 +339,25 @@ def mm(expr):
 
 def cm(expr):
     return mm(expr) / 10.0
+
+
+def edge_radius(edge):
+    """Radius in mm through three points of an edge (0, 1/3 and 2/3 along), as feature_tree.edge_radius
+    measures it in CadQuery; inf on a straight edge."""
+    ev = edge.evaluator
+    ok, t0, t1 = ev.getParameterExtents()
+    pts = []
+    for t in (t0, t0 + (t1 - t0) / 3, t0 + 2 * (t1 - t0) / 3):
+        ok, q = ev.getPointAtParameter(t)
+        pts.append((q.x * 10, q.y * 10, q.z * 10))
+    a, b, c = pts
+    sub = lambda u, v: (u[0] - v[0], u[1] - v[1], u[2] - v[2])
+    norm = lambda u: math.sqrt(u[0] ** 2 + u[1] ** 2 + u[2] ** 2)
+    u, v = sub(b, a), sub(c, a)
+    cr = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+    ab, bc, ca = norm(u), norm(sub(c, b)), norm(sub(a, c))
+    twice_area = norm(cr)
+    return float("inf") if twice_area < 1e-9 * max(ab, bc, ca, 1e-9) ** 2 else ab * bc * ca / (2 * twice_area)
 
 
 def length(expr):
@@ -454,6 +537,13 @@ def build(ui=None, close=False):
                         # Fusion raises instead ("Cannot create new fillet with empty entities").
                         report.setdefault("warnings", []).append(f"{s.get('id', op)}: no {s['edges']} edges, skipped")
                         continue
+                    # Under 0.9 of the smallest round the edges run along, as cap_round does in CadQuery.
+                    radii = [r for r in (edge_radius(edges.item(i)) for i in range(edges.count)) if math.isfinite(r)]
+                    if radii and mm(size) > 0.9 * min(radii):
+                        capped = round(0.9 * min(radii), 3)
+                        report.setdefault("warnings", []).append(
+                            f"{s.get('id', op)}: {op} capped from {mm(size):.2f} to {capped:.2f} mm, under the {min(radii):.2f} mm round its edges run along")
+                        size = f"{capped} mm"
                     if op == "fillet":
                         fi = F.filletFeatures.createInput()
                         try:
