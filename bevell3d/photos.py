@@ -11,6 +11,12 @@ MAX_SIDE = 1536
 
 def _open(path):
     if path.lower().endswith((".heic", ".heif")):
+        try:                                     # Linux (the deployed app): pillow-heif
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+            return Image.open(path)
+        except ImportError:                      # macOS without it: sips
+            pass
         tmp = tempfile.mkdtemp()
         out = os.path.join(tmp, "photo.jpg")
         subprocess.run(["sips", "-s", "format", "jpeg", path, "--out", out], check=True, capture_output=True)

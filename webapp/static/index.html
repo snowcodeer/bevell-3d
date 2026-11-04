@@ -100,6 +100,9 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 .files a:hover { border-color: var(--accent); }
 .times { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .err { color: var(--bad); }
+.pass { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.pass input { font: inherit; color: var(--fg); background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-height: 44px; }
+.pass input:focus { outline: 2px solid var(--accent-light); outline-offset: 1px; }
 .actions { position: sticky; bottom: 0; z-index: 5; background: linear-gradient(to top, var(--bg) 72%, rgb(20 22 26 / 0));
   padding: 16px var(--gutter) calc(14px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 8px; }
 .actions:empty { display: none; }
@@ -183,6 +186,7 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
       <p class="status" id="r-status"></p>
       <div class="grid" id="grid"></div>
       <p class="muted small">Remove blurry ones.</p>
+      <label class="pass" id="pass-row" hidden>Passcode<input id="pass" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
       <p class="err" id="up-err" hidden></p>
     </section>
 
@@ -325,15 +329,24 @@ function reviewScreen() {
   $("grid").querySelectorAll("button").forEach((b) => (b.onclick = () => { files.splice(+b.dataset.i, 1); reviewScreen(); }));
   actions(button("Make my CAD", "primary", upload, n < 8 || n > 40), button("Add more", "ghost", () => go("shoot")));
 }
+// Deployed, a run needs the passcode the server asks for; it is remembered on this device.
+let cfg = { passcode: false };
+fetch("/api/config").then((r) => r.json()).then((c) => { cfg = c; $("pass-row").hidden = !c.passcode; }).catch(() => {});
+const remembered = () => { try { return localStorage.getItem("bevell3d-pass") || ""; } catch { return ""; } };
+$("pass").value = remembered();
+const passHeader = () => ({ "x-passcode": $("pass").value.trim() || remembered() });
 async function upload() {
   $("up-err").hidden = true;
   const btn = $("actions").querySelector(".primary"); btn.disabled = true; btn.textContent = "Uploading…";
   const fd = new FormData(); files.forEach((f) => fd.append("photos", f, f.name));
+  let msg;
   try {
-    const r = await fetch("/api/scans", { method: "POST", body: fd }); const j = await r.json();
-    if (!r.ok) throw new Error(j.detail || "The upload failed.");
-    go("making", j.id);
-  } catch (e) { $("up-err").textContent = `${e.message} Check your connection and try again.`; $("up-err").hidden = false; btn.disabled = false; btn.textContent = "Make my CAD"; }
+    const r = await fetch("/api/scans", { method: "POST", body: fd, headers: passHeader() }); const j = await r.json();
+    if (r.ok) { try { localStorage.setItem("bevell3d-pass", $("pass").value.trim()); } catch {} go("making", j.id); return; }
+    msg = j.detail || "The upload failed.";
+    if (r.status === 401) { $("pass-row").hidden = false; $("pass").focus(); }
+  } catch (e) { msg = "The upload failed. Check your connection and try again."; }
+  $("up-err").textContent = msg; $("up-err").hidden = false; btn.disabled = false; btn.textContent = "Make my CAD";
 }
 
 // ---------- making it ----------
@@ -405,7 +418,12 @@ function agentCard(id, st) {
   }
   card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>Turn it into features you can edit</b>
     ${a?.state === "failed" ? `<span class="err small">Didn't work: ${esc(a.error)}</span>` : `<span class="muted small">About 5 minutes. Checked against your photos.</span>`}`;
-  const b = button("Make it editable", "ghost", async () => { b.disabled = true; await fetch(`/api/scans/${id}/agent`, { method: "POST" }); const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; agentCard(id, nst); });
+  const b = button("Make it editable", "ghost", async () => {
+    b.disabled = true;
+    const r = await fetch(`/api/scans/${id}/agent`, { method: "POST", headers: passHeader() });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); b.textContent = j.detail || "Couldn't start. Try again."; b.disabled = false; return; }
+    const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; agentCard(id, nst);
+  });
   card.append(b);
 }
 async function printScreen(id) {

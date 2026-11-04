@@ -4,6 +4,7 @@ trimesh==5.2.0
 scikit-image==0.26.0
 scipy==1.18.1
 pillow==13.0.0
+pillow-heif==1.8.1
 requests==2.34.2
 meta-sam-parser==0.1.0
 matplotlib==3.11.2

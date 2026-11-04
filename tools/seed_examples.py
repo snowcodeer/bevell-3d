@@ -42,9 +42,14 @@ def seed(name):
         summary["holder"] = {**cad["holder_params"], "floor_mm": cad["holder_params"]["floor"]}
     else:
         copies.update({"holder.stl": "holder.stl", "holder_nest.stl": "holder_nest.stl", "holder.3mf": "holder.3mf"})
+    # The CAD agent's best run: the richer brief (rich/), else tree mode (tree/), else the scan's own.
+    agent_src = next((d for d in (f"out/bench/{name}/rich", f"out/bench/{name}/tree") if os.path.exists(f"{d}/agent_tree.json")), src)
     for a, b in copies.items():
-        if os.path.exists(f"{src}/{a}"):
-            shutil.copy(f"{src}/{a}", f"{dst}/result/{b}")
+        here = agent_src if a.startswith("agent_") else src
+        if a.startswith("agent_") and here != src and not os.path.exists(f"{here}/{a}"):
+            continue                                  # a tree run has no CadQuery script; do not mix runs
+        if os.path.exists(f"{here}/{a}"):
+            shutil.copy(f"{here}/{a}", f"{dst}/result/{b}")
     if not os.path.exists(f"{src}/pads.3mf"):          # scans made before pads were part of a run
         from bevell3d.gripper import write_pads
         try:

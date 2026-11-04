@@ -37,6 +37,32 @@ FILES = {  # name -> (label, media type)
 }
 MIN_PHOTOS, MAX_PHOTOS = 8, 40
 ID = re.compile(r"^[a-z0-9-]{4,64}$")
+# Deployed, a scan or a CAD agent run needs the passcode and counts against a daily cap, so the
+# Meta and Modal credits cannot be run down. Both are off unless set (the local app stays open).
+PASSCODE = os.environ.get("BEVELL3D_PASSCODE", "")
+DAILY_CAP = int(os.environ.get("BEVELL3D_DAILY_CAP", "0") or 0)
+usage_lock = threading.Lock()
+
+
+def _check_access(request):
+    import hmac
+    if PASSCODE and not hmac.compare_digest(request.headers.get("x-passcode", "").strip().lower(), PASSCODE.lower()):
+        raise HTTPException(401, "That passcode isn't right.")
+
+
+def _count_run():
+    """Count one run against today's cap (UTC); refuse when it is used up."""
+    if not DAILY_CAP:
+        return
+    path = os.path.join(SCANS, "_usage.json")
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    with usage_lock:
+        use = json.load(open(path)) if os.path.exists(path) else {}
+        if use.get(today, 0) >= DAILY_CAP:
+            raise HTTPException(429, f"Today's {DAILY_CAP} runs are used up. Try again tomorrow, or see the examples.")
+        use = {today: use.get(today, 0) + 1}
+        os.makedirs(SCANS, exist_ok=True)
+        json.dump(use, open(path + ".tmp", "w")); os.replace(path + ".tmp", path)
 
 app = FastAPI(title="Bevell 3D")
 lock = threading.Lock()
@@ -72,10 +98,17 @@ def _work(scan_id, paths):
             _status(scan_id, state="failed", error=f"{type(e).__name__}: {e}", elapsed=round(time.time() - started, 1))
 
 
+@app.get("/api/config")
+def config():
+    return {"passcode": bool(PASSCODE), "daily_cap": DAILY_CAP}
+
+
 @app.post("/api/scans")
-async def create_scan(photos: list[UploadFile] = File(...)):
+async def create_scan(request: Request, photos: list[UploadFile] = File(...)):
+    _check_access(request)
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")
+    _count_run()
     scan_id = uuid.uuid4().hex[:12]
     up = os.path.join(SCANS, scan_id, "upload")
     os.makedirs(up)
@@ -136,11 +169,13 @@ def _agent(scan_id):
 
 
 @app.post("/api/scans/{scan_id}/agent")
-def start_agent(scan_id: str):
+def start_agent(scan_id: str, request: Request):
     """Muse Spark writes the object as an editable CAD program; the photos tune and check it."""
+    _check_access(request)
     res = os.path.join(SCANS, scan_id, "result")
     if not ID.match(scan_id) or not os.path.exists(os.path.join(res, "views.pkl")):
         raise HTTPException(404, "That scan has no photos to check CAD against.")
+    _count_run()
     _status(scan_id, agent={"state": "queued", "detail": "starting"})
     threading.Thread(target=_agent, args=(scan_id,), daemon=True).start()
     return {"ok": True}
