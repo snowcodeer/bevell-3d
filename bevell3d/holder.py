@@ -13,7 +13,8 @@ from skimage import measure
 
 def underside(mesh, pitch):
     """Per column of a top-down grid: the object's lowest z (inf outside its footprint)."""
-    pts = mesh.sample(max(20000, int(mesh.area / (pitch * pitch) * 2)))
+    # Seeded: the same scan always gives the same holder (unseeded, a test failed 1 run in 3).
+    pts = trimesh.sample.sample_surface(mesh, max(20000, int(mesh.area / (pitch * pitch) * 2)), seed=0)[0]
     pts = np.vstack([pts, mesh.vertices])
     lo = mesh.bounds[0][:2] - 1.0
     ij = np.floor((pts[:, :2] - lo) / pitch).astype(int)

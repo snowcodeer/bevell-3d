@@ -42,7 +42,7 @@ def grasp_frame(mesh, p=PadParams()):
 
 def _pad(mesh, centre, dvec, uvec, sign, p):
     """One pad, in its own frame (d' outwards from the centre plane, u along the jaw, v up)."""
-    pts = mesh.sample(max(60000, int(mesh.area / (p.pitch * p.pitch) * 2)))
+    pts = trimesh.sample.sample_surface(mesh, max(60000, int(mesh.area / (p.pitch * p.pitch) * 2)), seed=0)[0]   # repeatable pads
     rel = pts - centre
     dd, uu, vv = sign * rel @ dvec, rel @ uvec, rel[:, 2]
     nu, nv = int(np.ceil(p.width / p.pitch)) + 1, int(np.ceil(p.height / p.pitch)) + 1

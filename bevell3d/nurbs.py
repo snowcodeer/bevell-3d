@@ -248,8 +248,8 @@ def scan_to_nurbs(stl_path, step_path=None, quads=None):
         os.remove(prepared)
     vs, fs = solid.tessellate(0.05, 0.2)
     m = trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs))
-    to_scan = np.abs(trimesh.proximity.ProximityQuery(scan).signed_distance(m.sample(20000)))
-    from_scan = np.abs(trimesh.proximity.ProximityQuery(m).signed_distance(scan.sample(20000)))
+    to_scan = np.abs(trimesh.proximity.ProximityQuery(scan).signed_distance(trimesh.sample.sample_surface(m, 20000, seed=0)[0]))
+    from_scan = np.abs(trimesh.proximity.ProximityQuery(m).signed_distance(trimesh.sample.sample_surface(scan, 20000, seed=1)[0]))
     report = {"patches": int(len(F)), "valid": bool(solid.isValid()), "volume_cm3": round(solid.Volume() / 1000, 1),
               "scan_volume_cm3": round(float(scan.volume) / 1000, 1),
               "off_scan_mean_mm": round(float(np.r_[to_scan, from_scan].mean()), 2),
