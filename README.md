@@ -18,12 +18,17 @@ or Bevell's public API from here, never sharing code.
 2. Take 16 photos with a phone: 6 from 45°, 8 from low down, 2 from above.
 3. Upload them. Back come:
    - the model at true size, as STEP and STL;
-   - an editable feature tree (revolve, extrude, loft, sweep, shell, fillet) as a
-     CadQuery program and as a Fusion 360 script with named parameters and a timeline;
+   - CAD that fits the object: a revolve for turned parts, sketches and extrusions for
+     prismatic ones (with a Fusion 360 timeline: level heights and hole diameters are named
+     parameters), and smooth NURBS surfaces for freeform ones;
+   - on request, an editable feature tree Muse Spark writes (revolve, extrude, loft, sweep,
+     shell, fillet), checked against the photos, as a CadQuery program and a Fusion 360 script;
    - a holder to print: a pocket cut to the object's outline with 0.4 mm clearance, a
      filleted rim, a lead-in chamfer, finger notches and a chamfered foot, as STEP, STL,
      3MF (one tap opens it in Bambu Studio) and a DXF of its outline;
-   - gripper pads for the SO-101 arm, shaped to the object, and where to grasp it.
+   - for a robot arm (SO-101): gripper pads shaped to the object, and a fixture with finger
+     reliefs and a printed tag, with the pick given in the tag's frame so the arm's camera
+     can find the part and grip it.
 
 ## How Meta's models are used
 
@@ -42,24 +47,60 @@ photos on the capture sheet
   -> 22 ArUco markers: the camera's focal length, and each photo's pose (0.2 to 0.3 mm)
   -> SAM 3.1 masks every photo
   -> visual hull (voxel carve), or a revolved profile, or SAM 3D fitted to the silhouettes
-  -> CAD: revolve, loft or a sewn solid; the holder and pads from the model
+  -> CAD: revolve, stacked extrusions, loft, or NURBS patches; the holder, pads and fixture
   -> optional: Muse Spark writes an editable feature tree, tuned against the photos
 ```
 
 ## Measured
 
-Five scanned objects from Google Scanned Objects, rendered on the capture sheet in Blender
-with 16 photos each, run through the whole pipeline with real model calls, and scored
-against the true meshes:
+**Fourteen objects with known true shapes**: nine scanned household objects from Google
+Scanned Objects and four parts we designed (a bracket, an L-bracket, a gear and a sloped
+stand), photographed on the capture sheet in Blender (16 photos each) and run through the
+whole pipeline with real model calls, then scored against the true meshes
+(`tools/bench_table.py`):
 
-- Camera positions within 0.17 to 0.33 mm (median).
-- Size within 1.5 mm on 4 of 5 objects. The fifth, a white mouse, came out tight because
-  white on a white sheet is hard to mask.
-- Holders: on all five, a valid, watertight solid with a rounded rim, a lead-in and a
-  chamfered foot. None touches the true object except the white mouse's (1.8 mm, from the
-  masks above).
-- The CAD agent's models came closest to the true surface on the bottle (1.21 mm mean) and
-  the mug (2.09 mm, the only method that models its inside).
+| Object | CAD | Size off | Model to truth | Holder catch | Agent tree to truth |
+|---|---|---|---|---|---|
+| Vitamin bottle | revolve | 1.4 mm | 1.5 mm | none | 1.4 mm |
+| Tape roll | revolve | 1.1 | 1.0 | none | |
+| Camera lens | revolve | 0.8 | 0.7 | none | 1.1 |
+| Bracket | sketch + extrude | 2.7 | 0.9 | none | 0.7 |
+| L-bracket | NURBS | 1.5 | 0.9 | 0.25 | 0.7 |
+| Gear | NURBS | 1.3 | 1.3 | 0.29 | 0.9 |
+| Sloped stand | NURBS | 0.7 | 1.4 | 0.35 | |
+| Mario figure | NURBS | 1.8 | 0.9 | none | |
+| Android figure | NURBS | 0.9 | 1.7 | none | |
+| Alarm clock | NURBS | 1.9 | 2.6 | none | 3.4 |
+| Mug | NURBS | 0.4 | 3.6 | none | 1.8 |
+| Letter holder | NURBS | 2.4 | 4.8 | 0.41 | |
+| Fish toothbrush holder | NURBS | 1.3 | 4.4 | 0.74 | |
+| White mouse | loft | 6.4 | 1.5 | 1.6 | 2.2 |
+
+- Camera positions within 0.2 to 0.3 mm (median). Size within 2 mm on 11 of 14 objects.
+- "Model to truth" is the mean distance from the true surface. Open insides a camera cannot
+  carve from outside (the mug, the letter holder's compartments, the fish's cup) cost 3 to 5
+  mm; Muse Spark's feature tree models the mug's inside and comes to 1.8.
+- The white mouse is the known weak case: white on a white sheet is hard to mask. Put a
+  coloured card under white objects.
+- Holders are valid, watertight solids with every edge treatment; most do not touch the true
+  object at all.
+
+**Feature trees in Fusion 360:** every tree builds the same body in Fusion and in CadQuery,
+within 0.6% in volume and 0.44 mm in size (`tools/fusion_e2e.py`, through the BevellBridge
+add-in), and both refuse the same impossible ones.
+
+**Smooth NURBS:** Mario's 1,464 patches lie 0.06 mm from the scan and 0.93 mm from the true
+figure (the scan itself is 0.92), and open in Fusion as one solid.
+
+**What people do to photos** (`tools/user_tests.py`, the real pipeline): the minimum 8 photos,
+photos from one side only, blurred, dark, shrunk to 640 px, 48 MP, rotated by their EXIF tag,
+PNG and iPhone HEIC all come out within 2.5 mm of the true size. Sixteen copies of one photo,
+and photos cropped so the sheet is gone, are refused with what to do instead; an unreadable
+photo is skipped. The web API is covered by 23 tests (passcode, daily cap, file types, ids,
+path traversal).
+
+**Robot fixture:** the printed tag is found by a camera at its id and size, and its pose 300 mm
+away within 3 mm (`tests/test_fixture.py`, `tools/pick_preview.py`).
 
 ## Run it
 
