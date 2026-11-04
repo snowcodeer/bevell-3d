@@ -7,15 +7,18 @@ the median of their centres the vertical axis. The profile is then revolved.
 """
 import numpy as np, trimesh
 from scipy import ndimage
-from .hull import AREA_LO, AREA_HI, grid, carve
+from .hull import AREA_LO, AREA_HI, grid, carve, on_sheet
 
 
 def profile(views, masks, step=0.5, coarse=2.0):
-    pts, _ = grid(AREA_LO, AREA_HI, coarse)
-    sel = pts[carve(pts, views, masks)]
+    # Only what rests on the sheet, as in the hull: since the carve reaches 250 mm, a floating
+    # tower above the object stretched this fine grid to the ceiling and a scan took over 25
+    # minutes here (4 Nov).
+    pts, cshape = grid(AREA_LO, AREA_HI, coarse)
+    sel = pts[on_sheet(carve(pts, views, masks).reshape(cshape)).ravel()]
     lo = sel.min(0) - 2 * coarse; hi = sel.max(0) + 2 * coarse; lo[2] = 0.0
     fine, shape = grid(lo, hi, step)
-    occ = carve(fine, views, masks).reshape(shape)
+    occ = on_sheet(carve(fine, views, masks).reshape(shape))
     # A ring (a roll of tape) has a hole the top photos carve out; its slices are annuli, whose
     # inscribed circle sits in the wall. Filling them gives the outer profile, which is what a
     # holder needs (found on the benchmark's tape roll, 3 Nov 2026).
