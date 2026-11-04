@@ -253,6 +253,12 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   (`BEVELL3D_PASSCODE`). **The passcode is not written in this repo**; Natalie has it. A
   scan or an agent run needs it (header `x-passcode`, a field on the photo check screen), and
   there are 50 runs a day (UTC, `/scans/_usage.json`), then 429.
+- Or the visitor's own Meta Model API key (header `x-model-api-key`, a password field under the
+  passcode, kept in the tab's sessionStorage). It reaches the run's spawned process as an
+  argument, which sets `MODEL_API_KEY` before importing bevell3d, and is masked out of
+  status.json, prints and every file the run writes. Never validated against the API. Own-key
+  runs have their own cap (`BEVELL3D_BYOK_DAILY_CAP`, default 200) and keep SAM 3D unless
+  `BEVELL3D_BYOK_SAM3D=0`.
 - Checked through the deployed app with `tools.webapp_e2e --passcode`: the bottle in 129 s,
   Mario in 221 s with SAM 3D and a NURBS STEP, 12 of 12 files open each time.
 - The examples' freeform models are NURBS (Mario, the mug, the clock); the mouse's
@@ -374,8 +380,8 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 - **User tests** (`tools/user_tests.py`, real pipeline): minimum 8 photos, one side only,
   blurred, dark, 640 px, 48 MP, rotated by EXIF, PNG and HEIC all come out within 2.5 mm;
   sixteen copies of one photo and photos with no sheet are refused with what to do; a broken
-  photo is skipped. API tests (`tests/test_webapp.py`, 23) cover the passcode, the cap, photo
-  limits, file types, ids and path traversal.
+  photo is skipped. API tests (`tests/test_webapp.py`, 41) cover the passcode, own keys, the caps,
+  photo limits, file types, ids and path traversal.
 - **Each scan and agent run is its own spawned process** (`webapp/server.py`, `_in_child`),
   stopped after 20 and 30 minutes (`BEVELL3D_SCAN_TIMEOUT`, `BEVELL3D_AGENT_TIMEOUT`). Not a
   daemon: the holder and the agent's builder start processes of their own. Messages our

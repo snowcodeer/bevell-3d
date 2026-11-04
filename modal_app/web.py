@@ -7,6 +7,7 @@ smooth NURBS step, scans in a Volume, and SAM 3D called on the bevell-sam3d GPU 
     modal volume put bevell-3d-scans out/scans/example-bottle /example-bottle    # each example
 
 A scan or a CAD agent run needs the passcode, and there are BEVELL3D_DAILY_CAP of them a day.
+Or the visitor's own Meta Model API key, with its own cap (BEVELL3D_BYOK_DAILY_CAP, default 200).
 One container serves everything: the server runs one scan at a time and keeps its state on
 disk, so a second container would only split the queue.
 """

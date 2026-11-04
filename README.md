@@ -107,8 +107,8 @@ figure (the scan itself is 0.92), and open in Fusion as one solid.
 photos from one side only, blurred, dark, shrunk to 640 px, 48 MP, rotated by their EXIF tag,
 PNG and iPhone HEIC all come out within 2.5 mm of the true size. An unreadable photo is skipped
 and named; photos of another object mixed in are left out. Sixteen copies of one photo, and
-photos cropped so the sheet is gone, are refused with what to do instead. 13 of 13 pass. The web API is covered by 26 tests (passcode, daily cap, file types, ids,
-path traversal).
+photos cropped so the sheet is gone, are refused with what to do instead. 13 of 13 pass. The web API is covered by 41 tests (passcode, own API keys, daily caps,
+file types, ids, path traversal).
 
 **Robot fixture:** the printed tag is found by a camera at its id and size, and its pose 300 mm
 away within 3 mm (`tests/test_fixture.py`, `tools/pick_preview.py`). The tag PDF's second
@@ -124,8 +124,9 @@ export MODEL_API_KEY=...   # Meta Model API
 ```
 
 Then open http://localhost:8300 on a phone or a laptop. A deployed copy runs at
-https://nataliechan1963--bevell-3d-web.us-east.modal.run (`modal_app/web.py`); running a scan
-there needs a passcode, and the examples are open to anyone. `python -m bevell3d.run --out out/x
+https://nataliechan1963--bevell-3d-web.us-east.modal.run (`modal_app/web.py`). Anyone can run
+a scan there with their own Meta Model API key, judges have a passcode, and the examples are open
+to all. The key is used only for that scan and is not stored. `python -m bevell3d.run --out out/x
 photos/*.jpg` runs the same pipeline from the command line.
 
 To build a feature tree inside Fusion 360, start the BevellBridge add-in
