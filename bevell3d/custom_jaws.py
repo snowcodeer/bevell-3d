@@ -111,6 +111,7 @@ def loop_clip_mesh(outline, h, p=FingerParams(), span=None, wall=1.8, lip=0.5, l
 
 
 ROUND_MM = 2.0      # every edge of an arm is rounded to this radius
+PATCH_FRAC, PATCH_MAX_MM = 0.35, 6.0  # the arm's base on the jaw: wider bases met the other jaw as it turned
 
 
 def _rounded_hull(pts, r=ROUND_MM):
@@ -124,11 +125,13 @@ def _rounded_hull(pts, r=ROUND_MM):
     return trimesh.convex.convex_hull((v[:, None, :] + ball[None, :, :]).reshape(-1, 3))
 
 
-def _arm(clip, part, toward, thickness=6.0, embed=2.0):
-    """A solid arm from a clip to a part: the hull of the clip's face that looks at the part and a
-    flared patch of the part's surface, pushed `embed` mm into it, with every edge rounded. The
-    flare (half as wide again as the clip's face) meets the part at a shallow angle instead of a
-    hard step."""
+def _arm(clip, part, toward, thickness=6.0, depth=3.0):
+    """A solid arm from a clip to a part, every edge rounded: the hull of the clip's face that looks
+    at the part and the part's own surface where it faces the clip, within a patch as wide as the
+    clip's face, each point of it sunk into the part as far as the material stays solid (up to
+    `depth` mm, so never into the servo's pocket). Built on the part's real surface, the arm sits
+    flush on the face it meets; a square patch aimed at the nearest point met a corner of the
+    housing on one edge only."""
     pts = clip.vertices
     d = pts @ toward
     face = pts[d > d.max() - 0.6]                      # the clip's face that looks at the part
@@ -136,11 +139,23 @@ def _arm(clip, part, toward, thickness=6.0, embed=2.0):
     target, dist, _ = trimesh.proximity.closest_point(part, [centre])
     target = target[0]
     n = (target - centre) / (np.linalg.norm(target - centre) + 1e-9)
-    span = np.ptp(face, axis=0); r = max(4.0, min(12.0, 0.75 * float(np.sort(span)[-2])))
-    a = np.cross(n, [0, 0, 1.0]); a = a if np.linalg.norm(a) > 0.1 else np.cross(n, [1.0, 0, 0]); a /= np.linalg.norm(a)
-    b = np.cross(n, a)
-    patch = np.array([target + n * embed + a * sa * r + b * sb * (thickness * 0.75) for sa in (-1, 1) for sb in (-1, 1)])
-    return _rounded_hull(np.vstack([face, patch])), float(dist[0])
+    span = np.ptp(face, axis=0); r = max(3.0, min(PATCH_MAX_MM, PATCH_FRAC * float(np.sort(span)[-2])))
+    V, N = part.vertices, part.vertex_normals
+    pick = (np.linalg.norm(V - target, axis=1) < r) & ((N @ -n) > 0.25)
+    if pick.sum() < 4:                                 # no facing surface near: the old square patch
+        a = np.cross(n, [0, 0, 1.0]); a = a if np.linalg.norm(a) > 0.1 else np.cross(n, [1.0, 0, 0]); a /= np.linalg.norm(a)
+        b = np.cross(n, a)
+        base = np.array([target + n * 2.0 + a * sa * r + b * sb * (thickness * 0.75) for sa in (-1, 1) for sb in (-1, 1)])
+        return _rounded_hull(np.vstack([face, base])), float(dist[0])
+    P, PN = V[pick], N[pick]
+    if len(P) > 600:
+        k = np.random.default_rng(0).choice(len(P), 600, replace=False); P, PN = P[k], PN[k]
+    sunk = P.copy(); ok = np.ones(len(P), bool)
+    for frac in (1 / 3, 2 / 3, 1.0):                   # as deep as every step stays inside
+        q = P - PN * depth * frac
+        ok &= part.contains(q)
+        sunk[ok] = q[ok]
+    return _rounded_hull(np.vstack([face, P, sunk])), float(dist[0])
 
 
 def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=FingerParams()):
@@ -169,7 +184,8 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     # What the preview and the simulation show: SAM 3D's model when the scan made one (it keeps
     # the thin blades), else the outline extruded to the measured thickness.
     shown = os.path.join(scan_dir, "sam3d_fitted.stl")
-    mesh = trimesh.load(shown) if os.path.exists(shown) else flat_model(outline, t)
+    from .tool_geometry import shown_model
+    mesh = shown_model(outline, info, pivot, toward, trimesh.load(shown) if os.path.exists(shown) else None)
     u = -toward                                          # pivot -> loops, in the sheet plane
     v = np.array([-u[1], u[0]])
     fixed = trimesh.load(os.path.join(ROOT, "assets", "wrist_roll_follower_so101_v1.stl")); fixed.apply_scale(1000)
@@ -362,7 +378,19 @@ def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30):
     r = mujoco.Renderer(m, 960, 1280) if video else None
     frames, opened = [], []
     hf = trimesh.load(os.path.join(out_dir, "scissors_half_fixed.stl"))
-    ax = lambda mesh: np.linalg.svd(mesh.vertices - mesh.vertices.mean(0), full_matrices=False)[2][0]   # a half's long axis
+    # The blades' opening: each half's blade (the part more than 25 mm past the pivot towards the
+    # tips) as a direction in the scissors' plane. A whole half's long axis is no measure: the
+    # loops sit either side of the axis even when the scissors are shut, which read as 12 degrees.
+    allv = np.vstack([hm.vertices, hf.vertices]); pv0 = np.array([H[0], 0.0, H[2]])
+    u = np.linalg.svd(allv - allv.mean(0), full_matrices=False)[2][0]; u[1] = 0; u /= np.linalg.norm(u)
+    if ((allv - pv0) @ u).max() < -((allv - pv0) @ u).min():
+        u = -u
+    blade_m = (hm.vertices - pv0) @ u > 25.0             # the same points of each blade in every frame
+    def ax(mesh, keep=None):
+        b = mesh.vertices[(mesh.vertices - pv0) @ u > 25.0 if keep is None else keep]
+        b = b - b.mean(0); b[:, 1] = 0
+        a = np.linalg.svd(b, full_matrices=False)[2][0]
+        return a * np.sign(a @ u)
     a_f = ax(hf)
     for k in range(int(seconds / m.opt.timestep)):
         tt = k * m.opt.timestep
@@ -371,7 +399,7 @@ def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30):
         if k % int(1 / (fps * m.opt.timestep)) == 0:
             q = float(d.qpos[0])
             hm_now = hm.copy().apply_transform(moving_to_gripper(q) @ np.linalg.inv(Tm0))
-            opened.append((q, math.degrees(math.acos(min(1.0, abs(float(ax(hm_now) @ a_f)))))))
+            opened.append((q, math.degrees(math.acos(min(1.0, abs(float(ax(hm_now, blade_m) @ a_f)))))))
             if r:
                 for cam in ("side", "three_quarter"):
                     r.update_scene(d, camera=cam); frames.append((cam, r.render().copy()))

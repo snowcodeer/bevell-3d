@@ -103,3 +103,56 @@ def tool_thickness(info, lo=3.0, hi=12.0):
     """The handles' measured thickness (the scan's, at the grasp line), within reason."""
     t = float(np.median([h["thickness_mm"] for h in info["handles"]]))
     return float(np.clip(t, lo, hi))
+
+
+def shown_model(outline, info, pivot, toward, sam=None, reach=400.0):
+    """The tool as the preview and the simulation show it, sheet frame: the handles from the
+    outline the photos measured, each loop at its own measured thickness and height, and in
+    front of the pivot SAM 3D's blades when there is a SAM 3D model (it keeps them thin), else
+    the outline there too. SAM 3D's loops are its guess: on a real pair of scissors its finger
+    holes came out 60% larger than the photos' and one 4.9 mm off, so a clip fitted to the real
+    loop looked as if it cut through the shown one."""
+    from shapely.geometry import box as sbox
+    from shapely import affinity
+    p = np.asarray(pivot, float); a = np.asarray(toward, float) / np.linalg.norm(toward)
+    ang = np.degrees(np.arctan2(a[1], a[0]))
+    def half(x0, x1, y0, y1):                        # a box in the axis frame, placed at the pivot
+        g = sbox(x0, y0, x1, y1)
+        return affinity.translate(affinity.rotate(g, ang, origin=(0, 0)), p[0], p[1])
+    t_all = tool_thickness(info)
+    parts = []
+    for side in (1, -1):
+        region = outline.intersection(half(-reach, 0, 0, side * reach) if side > 0 else half(-reach, 0, -reach, 0))
+        if region.is_empty:
+            continue
+        cs = [h for h in info["handles"] if np.sign(((np.array(h["centre_mm"]) - p) @ np.array([-a[1], a[0]])) or 1) == side]
+        h = cs[0] if cs else None
+        z0 = float(h["z_mm"]) if h else 0.0
+        th = float(h["thickness_mm"]) if h else t_all
+        for g in getattr(region, "geoms", [region]):
+            if g.area > 1.0:
+                m = trimesh.creation.extrude_polygon(g.buffer(0), th); m.apply_translation((0, 0, z0)); parts.append(m)
+    if sam is not None:
+        # SAM 3D's own screw (the highest bump within 15 mm of the found pivot) moved onto the
+        # pivot, then its blades stretched along the axis to the outline's tip: on the real pair
+        # its screw sat 8.1 mm along the axis from the screw in the photo, so the scissors shown
+        # turned about a point that was not their screw.
+        v = sam.vertices; near = np.linalg.norm(v[:, :2] - p, axis=1) < 15.0
+        if near.sum() > 20:
+            zn = v[near, 2]; top = v[near][zn > np.percentile(zn, 97)]
+            off = p - top[:, :2].mean(0)
+            if np.linalg.norm(off) < 15.0:
+                sam = sam.copy(); sam.apply_translation(np.r_[off, 0.0])
+        blades = sam.slice_plane(np.r_[p, 0.0], np.r_[a, 0.0], cap=False)
+        if blades is not None and len(blades.faces):
+            l_out = float(max((np.array(c) - p) @ a for c in outline.exterior.coords))
+            l_sam = float(((blades.vertices[:, :2] - p) @ a).max())
+            k = float(np.clip(l_out / max(l_sam, 1e-6), 0.85, 1.15))
+            A = np.r_[a, 0.0]; M = np.eye(4); M[:3, :3] += (k - 1) * np.outer(A, A)
+            M[:3, 3] = -(M[:3, :3] @ np.r_[p, 0.0]) + np.r_[p, 0.0]
+            blades.apply_transform(M)
+    else:
+        blades = flat_model(outline.intersection(half(0, reach, -reach, reach)), t_all)
+    if blades is not None and len(blades.faces):
+        parts.append(blades)
+    return trimesh.util.concatenate(parts)
