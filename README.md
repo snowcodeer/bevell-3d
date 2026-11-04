@@ -85,18 +85,18 @@ whole pipeline with real model calls, then scored against the true meshes
 - Holders are valid, watertight solids with every edge treatment; most do not touch the true
   object at all.
 
-**Feature trees in Fusion 360:** every tree builds the same body in Fusion and in CadQuery,
-within 0.6% in volume and 0.44 mm in size (`tools/fusion_e2e.py`, through the BevellBridge
-add-in), and both refuse the same impossible ones.
+**Feature trees in Fusion 360:** ten test trees, hand-written and Muse Spark's, build the same
+body in Fusion and in CadQuery, within 0.6% in volume and 0.44 mm in size, and both refuse the
+same impossible one (`tools/fusion_e2e.py`, through the BevellBridge add-in).
 
 **Smooth NURBS:** Mario's 1,464 patches lie 0.06 mm from the scan and 0.93 mm from the true
 figure (the scan itself is 0.92), and open in Fusion as one solid.
 
 **What people do to photos** (`tools/user_tests.py`, the real pipeline): the minimum 8 photos,
 photos from one side only, blurred, dark, shrunk to 640 px, 48 MP, rotated by their EXIF tag,
-PNG and iPhone HEIC all come out within 2.5 mm of the true size. Sixteen copies of one photo,
-and photos cropped so the sheet is gone, are refused with what to do instead; an unreadable
-photo is skipped. The web API is covered by 23 tests (passcode, daily cap, file types, ids,
+PNG and iPhone HEIC all come out within 2.5 mm of the true size. An unreadable photo is skipped
+and named; photos of another object mixed in are left out. Sixteen copies of one photo, and
+photos cropped so the sheet is gone, are refused with what to do instead. 13 of 13 pass. The web API is covered by 23 tests (passcode, daily cap, file types, ids,
 path traversal).
 
 **Robot fixture:** the printed tag is found by a camera at its id and size, and its pose 300 mm
