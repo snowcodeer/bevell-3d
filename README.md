@@ -85,9 +85,12 @@ whole pipeline with real model calls, then scored against the true meshes
 - Holders are valid, watertight solids with every edge treatment; most do not touch the true
   object at all.
 
-**Feature trees in Fusion 360:** ten test trees, hand-written and Muse Spark's, build the same
-body in Fusion and in CadQuery, within 0.6% in volume and 0.44 mm in size, and both refuse the
-same impossible one (`tools/fusion_e2e.py`, through the BevellBridge add-in).
+**Feature trees in Fusion 360:** 15 of 16 trees, hand-written, Muse Spark's and the prismatic
+route's, build the same body in Fusion and in CadQuery, within 0.6% in volume and 0.45 mm in
+size, and both refuse the same impossible one (`tools/fusion_e2e.py`, through the BevellBridge
+add-in). The sixteenth, Muse Spark's richer mouse, is a spline loft 0.65 mm apart on 128 mm
+(volume +0.6%): the two kernels draw a closed spline through the same points a little
+differently between them.
 
 **Smooth NURBS:** Mario's 1,464 patches lie 0.06 mm from the scan and 0.93 mm from the true
 figure (the scan itself is 0.92), and open in Fusion as one solid.
