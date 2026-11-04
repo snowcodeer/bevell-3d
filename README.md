@@ -131,10 +131,33 @@ photos/*.jpg` runs the same pipeline from the command line.
 To build a feature tree inside Fusion 360, start the BevellBridge add-in
 (`fusion_bridge/BevellBridge`) and run `python -m tools.fusion_e2e`.
 
+## Robot fingers for a tool
+
+"Make robot fingers" on the start screen takes the same guided photos of a pair of scissors or
+pliers lying flat and closed, and returns two gripper fingers for the SO-101 that let it hold
+the tool and work it (`bevell3d/tool_fingers.py`):
+
+- The tool's outline comes from the photos taken from above, projected onto the sheet, finger
+  loops included. On stand-in scissors it is 1.1 mm off at worst (the 3D scan's is 1.8).
+- At the handles' widest line each jaw gets a saddle shaped to its handle (the outer side of
+  each finger-loop ring), with zip-tie notches. Stand-in scissors: jaw gap 63.1 mm, rings
+  gripped 5.1 and 5.2 mm (true 62.6, 4.9 and 4.6).
+- **Tested in MuJoCo** (`bevell3d/scissors_sim.py`) with The Robot Studio's own SO-101 jaw meshes
+  and gripper hinge: the scan split into two halves on a hinge at the pivot, the gripper's
+  servo driving them. The SO-101's jaw turns about a hinge high in the wrist and the scissors
+  about their pivot below the fingertips, so the moving jaw's loop has to ride a rail. A rail
+  pointing at the scissors' pivot drives them steadily: 19.5 degrees of gripper opens the
+  blades about 19, the same on the scan and on the exact shape, the joint holding to 0.03 mm,
+  the loop sliding 21 mm. That rail sits 56 degrees off the finger, so its bracket is still to
+  design; a rail along the finger fits flat but let the loop run on the exact shape.
+
 ## Credits
 
 - Benchmark objects: [Google Scanned Objects](https://research.google/blog/scanned-objects-by-google-research-a-dataset-of-3d-scanned-common-household-items/),
   CC BY 4.0, via Gazebo Fuel's GoogleResearch collection.
 - SAM 3D Objects and SAM 3.1 by Meta.
+- The SO-101 gripper's model and jaw meshes (`third_party/so101`): The Robot Studio's
+  [SO-ARM100](https://github.com/TheRobotStudio/SO-ARM100), Apache License 2.0.
+- MuJoCo by Google DeepMind, for the scissors simulation.
 - MIT licence for the code. The Bevell name, logo and wordmark (`webapp/static/logo-icon.svg`,
   `webapp/static/bevell-wordmark.svg`) are Bevell's trademarks and are not covered by it.

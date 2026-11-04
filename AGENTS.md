@@ -328,6 +328,25 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   29 minutes for 3 rounds (the app runs 2). A build is 0.3 s, so the time is Muse Spark's.
   The fixture grips the case across its 19.7 mm side, 20.5 mm up, below the ears; rendered,
   the pick lands 3.1 mm from the truth at 31 cm (`docs/images/servo_pick.png`).
+- **Robot fingers for a tool** (4 Nov, evening; `bevell3d/tool_fingers.py`, `scissors_sim.py`):
+  - Flow: start screen "Make robot fingers" sends `mode=gripper`; the runner always looks for
+    two handles then (otherwise only for flat objects, height under a fifth of the length, so a
+    mug's handle is never a tool) and says why when it finds none.
+  - Outline: `top_outline` back-projects the masks of the two most top-down photos onto the
+    plane at mid-thickness and intersects them (loops included). Handles: along the long axis,
+    lines that cross the filled outline in exactly two pieces; the grasp line where they are
+    widest; the gripped part is the outermost piece of each (a loop's outer ring).
+  - Simulation: The Robot Studio's SO-101 files in `third_party/so101` (Apache 2.0, commit in
+    `COMMIT`). In the gripper frame the fingertips are about 100 mm down, the jaws close along x
+    and the moving jaw turns about a hinge at (20.2, 18.8, -23.4) mm with axis -y; tips are 15.8
+    mm apart closed. Findings on stand-in scissors: rigid on both jaws they bind; a rail along
+    the finger came within a few degrees of the loop's path and let it run (62 degrees of blade
+    for 3 of gripper on the exact shape, fine on the scan, so ill-conditioned); a rail pointing
+    at the scissors' pivot drives 1:1 (19.5 degrees of gripper, about 19 of blade, joint within
+    0.03 mm, 21 mm of slide) on scan and exact shape alike. That rail is 56 degrees off the
+    finger: its bracket is not designed yet (next step).
+  - The pivot is estimated from the outline (where the two handles join, 6 mm on); a real
+    pair's screw could be found in the photo instead.
 - **Looking closer** (`scan.look_closer`): a small object seen low down can be too few
   pixels for SAM 3.1. On the 42 mm servo, with the whole sheet in view, it found nothing in
   all eight low photos, with any prompt; the same photo cropped round the servo gave it at

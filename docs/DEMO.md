@@ -1,5 +1,26 @@
 # Demo video: script and shots (3 minutes)
 
+## Tonight's direction (4 Nov, late): give the robot scissors
+
+The story: **a cheap robot arm can't use scissors. Sixteen photos give it fingers that can.**
+
+| Time | On screen | Voice-over |
+|---|---|---|
+| 0:00 to 0:10 | The SO-101 with its stock jaws fumbling a pair of scissors. | "A robot arm is useless with a tool it can't hold. Custom fingers usually mean an afternoon of CAD." |
+| 0:10 to 0:40 | Phone: "Make robot fingers", the guided camera's overlay ring by ring, scissors flat and closed on the sheet. | "Sixteen photos on a printed sheet. The squares give every photo its scale and its camera position." |
+| 0:40 to 1:00 | The making screen: Muse Spark names the tool, SAM 3.1 cuts it out. | "Muse Spark plans the scan, SAM 3.1 finds the scissors in every photo, down to the finger loops." |
+| 1:00 to 1:25 | Result: the scissors with their two saddles in 3D, the jaw gap, "tested in MuJoCo". | "Back come fingers shaped to these scissors, fitted to the SO-101's real jaws." |
+| 1:25 to 1:50 | `out/broll/scissors_sim.mp4`: the SO-101 in MuJoCo opening and closing the scissors, the loop riding its rail. | "Tested in simulation first: the gripper's own motion opens and closes the blades." |
+| 1:50 to 2:35 | The print, the fitting (saddle tight on the fixed jaw, loop tied loosely on the moving jaw), the gripper opening and closing the real scissors, then a cut through a card held by the second arm or a clip (taught with the leader arm, replayed). | "Print, clip on, and the arm cuts. Taught once, replayed." |
+| 2:35 to 3:00 | Numbers, the Meta models, the URL. | "Built on Muse Spark, SAM 3.1 and SAM 3D. Any tool with two handles, in minutes." |
+
+Say "designed from the scan, tested in simulation, first prototype". The rail the simulation
+calls for (pointing at the scissors' pivot) is not printed yet: tonight's moving jaw uses a
+loose tie instead, which is the same idea with slack.
+
+---
+
+
 The story in one line: **photos in, CAD out: measured, editable, printable, and ready for a
 robot.** Every claim on screen is one we measured; the numbers are in the README.
 
