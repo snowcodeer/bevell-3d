@@ -175,6 +175,16 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     # What the preview and the simulation show: SAM 3D's model when the scan made one (it keeps
     # the thin blades), else the outline extruded to the measured thickness.
     shown = os.path.join(scan_dir, "sam3d_fitted.stl")
+    # Each loop's thickness: the smaller of the carved shape's and SAM 3D's at the loop. The carved
+    # shape only ever comes out too thick (it is an outer bound), and on a real pair one loop
+    # carved at 8.1 mm where SAM 3D and the other loop said 6.6: a clip built for 8.1 holds
+    # nothing.
+    if os.path.exists(shown):
+        sam_v = trimesh.load(shown).vertices
+        for h in info["handles"]:
+            nb = sam_v[np.linalg.norm(sam_v[:, :2] - np.asarray(h["centre_mm"]), axis=1) < 3.0]
+            if len(nb) > 10 and 2.0 < np.ptp(nb[:, 2]) < h["thickness_mm"]:
+                h["thickness_from"] = "sam3d"; h["thickness_mm"] = round(float(np.ptp(nb[:, 2])), 2)
     from .tool_geometry import shown_model, smooth_outline, tool_halves_cut
     clean = smooth_outline(outline)                   # the clips and the shown tool, without pixel steps
     mesh = shown_model(clean, info, pivot, toward, trimesh.load(shown) if os.path.exists(shown) else None)
@@ -235,9 +245,11 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     side_m = np.sign((np.array(info["handles"][km]["centre_mm"]) - pivot) @ perp) or 1.0
     cut_m = cuts[side_m].copy().apply_transform(S); cut_f = cuts[-side_m].copy().apply_transform(S)
     sweep = [cut_m.copy().apply_transform(moving_to_gripper(q) @ np.linalg.inv(Tm0)) for q in np.linspace(0.0, 0.45, 6)]
-    new_moving = trimesh.boolean.union([moving_g, clips[km], arm_m], engine="manifold")
+    # Each arm blended into its jaw and clip with a 4 mm fillet (blend.py), not stuck on at a crease.
+    from .blend import blend_join
+    new_moving = blend_join(trimesh.boolean.union([moving_g, clips[km]], engine="manifold"), arm_m, radius=4.0)
     new_moving = trimesh.boolean.difference([new_moving] + [k for k in (keepouts[km],) if k is not None] + [cut_m, cut_f], engine="manifold").apply_transform(np.linalg.inv(Tm0))
-    new_fixed = trimesh.boolean.union([fixed_g, clips[1 - km], arm_f], engine="manifold")
+    new_fixed = blend_join(trimesh.boolean.union([fixed_g, clips[1 - km]], engine="manifold"), arm_f, radius=4.0)
     new_fixed = trimesh.boolean.difference([new_fixed] + [k for k in (keepouts[1 - km],) if k is not None] + [cut_f] + sweep, engine="manifold").apply_transform(np.linalg.inv(Tf))
     # The scissors halves for the simulation: the scan cut down the middle (v = 0), in the gripper frame.
     sc = mesh.copy().apply_transform(S)
