@@ -63,6 +63,12 @@ def seed(name):
     if os.path.isdir(f"{src}/photos"):                # the agent checks its CAD against these
         shutil.copytree(f"{src}/photos", f"{dst}/result/photos", ignore=shutil.ignore_patterns("full"))
     summary["holder"] = rebuild_holder(f"{dst}/result", summary)
+    try:                                                 # the robot fixture, as today's runner makes it
+        from bevell3d.fixture import write_fixture
+        fx = write_fixture(f"{dst}/result", trimesh.load(f"{dst}/result/model.stl"))
+        summary["fixture"] = {"tag_id": fx["tag"]["id"], "grasp_mm": fx["grasp"]["centre_mm"], "relief_mm": fx["fixture"]["relief_mm"]}
+    except Exception as e:
+        print("no fixture for", name, e)
     if summary.get("cad", {}).get("kind") == "mesh":     # freeform: today's smooth NURBS STEP
         import cadquery as cq
         from bevell3d.nurbs import scan_to_nurbs
