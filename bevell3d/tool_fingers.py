@@ -161,7 +161,7 @@ def handles(mesh, p=FingerParams(), n=121, outline=None):
             "grasp_line_mm": q.round(2).tolist(), "gap_mm": round(float(iv[1][0] - iv[0][1]), 2), "handles": out}
 
 
-def saddle(h, p=FingerParams()):
+def saddle(h, p=FingerParams(), extra=0.0):
     """One saddle in its own frame: x along the jaw, y from the jaw's face towards the tool, z up.
     The back (y = 0) sits on the jaw; the groove holds the outer half of the handle, turned to the
     handle's own angle; zip-tie notches cross the back, top and bottom."""
@@ -169,23 +169,24 @@ def saddle(h, p=FingerParams()):
     gw, gt = w + 2 * p.clearance, t + 2 * p.clearance
     depth = p.back + w / 2                     # to the handle's centre line
     height = gt + 2 * p.lip
-    block = cq.Workplane("XY").box(p.length, depth, height, centered=(True, False, False))
+    L = p.length + extra                       # a rail: longer, so the loop can slide along it
+    block = cq.Workplane("XY").box(L, depth, height, centered=(True, False, False))
     r = max(0.4, 0.25 * min(gw, gt))
     groove = (cq.Workplane("YZ").center(p.back + w / 2, height / 2).rect(gw, gt).extrude(p.length * 3, both=True)
               .edges("|X").fillet(r))
     groove = groove.rotate((0, p.back + w / 2, 0), (0, p.back + w / 2, 1), h.get("tilt_deg", 0.0))
     body = block.cut(groove)
     for sx in (-1, 1):                         # two ties, 4 mm in from each end
-        x = sx * (p.length / 2 - 4 - p.tie / 2)
+        x = sx * (L / 2 - 4 - p.tie / 2)
         for cut in (cq.Workplane("XY").box(p.tie, p.tie_depth, height + 2, centered=(True, False, True)).translate((x, 0, height / 2)),
                     cq.Workplane("XY").box(p.tie, depth + 2, p.tie_depth, centered=(True, False, False)).translate((x, -1, height - p.tie_depth)),
                     cq.Workplane("XY").box(p.tie, depth + 2, p.tie_depth, centered=(True, False, False)).translate((x, -1, 0))):
             body = body.cut(cut)
-    return body.val(), {"length_mm": p.length, "depth_mm": round(depth, 2), "height_mm": round(height, 2),
+    return body.val(), {"length_mm": round(L, 1), "depth_mm": round(depth, 2), "height_mm": round(height, 2),
                         "groove_mm": [round(gw, 2), round(gt, 2)]}
 
 
-def tool_fingers(mesh, p=FingerParams(), outline=None):
+def tool_fingers(mesh, p=FingerParams(), outline=None, rail=None):
     """Both saddles, laid out for printing (back down, side by side), and placed on the tool for a
     preview; and the report."""
     info = handles(mesh, p, outline=outline)
@@ -195,7 +196,7 @@ def tool_fingers(mesh, p=FingerParams(), outline=None):
     for k, h in enumerate(info["handles"]):
         out_dir = -1 if k == 0 else 1          # handle 0 lies on the -perp side of the line
         h = {**h, "tilt_deg": h["angle_deg"]}
-        solid, dims = saddle(h, p)
+        solid, dims = saddle(h, p, rail["rail_mm"] if rail and rail.get("moving_handle") == k else 0.0)
         # Print: back face (y = 0) down on the bed, so the groove opens upwards with no overhang.
         lay = solid.rotate((0, 0, 0), (1, 0, 0), 90).translate((0, k * (dims["height_mm"] + 6), 0))
         bb = lay.BoundingBox(); prints.append(lay.translate((0, 0, -bb.zmin)))
@@ -216,8 +217,10 @@ def tool_fingers(mesh, p=FingerParams(), outline=None):
     return prints, placed, report
 
 
-def write_tool_fingers(out_dir, mesh, p=FingerParams(), outline=None):
-    prints, placed, report = tool_fingers(mesh, p, outline)
+def write_tool_fingers(out_dir, mesh, p=FingerParams(), outline=None, rail=None):
+    prints, placed, report = tool_fingers(mesh, p, outline, rail)
+    if rail:
+        report["moving_jaw_saddle"] = rail["moving_handle"]
     report["outline_from"] = "photos from above" if outline is not None else "the scan"
     both = cq.Compound.makeCompound(prints)
     cq.exporters.export(cq.Workplane().add(both), os.path.join(out_dir, "tool_fingers.step"))

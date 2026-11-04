@@ -145,6 +145,18 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
             tf = write_tool_fingers(out_dir, final, outline=outline)
             summary["tool_fingers"] = {"jaw_gap_mm": tf["jaw_gap_tool_closed_mm"], "grip_mm": [s["width_mm"] for s in tf["saddles"]],
                                        "loops": all(s["loop"] for s in tf["saddles"]), "outline_from": tf["outline_from"]}
+            # Scissors: the SO-101 working them in MuJoCo sets the gripper's range and the rail the
+            # moving jaw's loop slides along (the jaw's arc and the loop's arc differ).
+            if summary["tool_fingers"]["loops"]:
+                try:
+                    from .scissors_sim import tune
+                    xml, sim = tune(out_dir)
+                    open(os.path.join(out_dir, "scissors_sim.xml"), "w").write(xml)
+                    json.dump(sim, open(os.path.join(out_dir, "scissors_sim.json"), "w"), indent=1)
+                    tf = write_tool_fingers(out_dir, final, outline=outline, rail=sim)
+                    summary["tool_fingers"]["sim"] = {k: sim[k] for k in ("gripper_open_rad", "gripper_open_deg", "blades_open_deg", "rail_mm", "held", "joint_gap_max_mm")}
+                except Exception as e:
+                    summary["tool_sim_error"] = f"{type(e).__name__}: {e}"
         except ValueError as e:                    # no two handles side by side: not a tool
             if tool:
                 summary["tool_fingers_why"] = str(e)

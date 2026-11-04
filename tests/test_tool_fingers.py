@@ -40,3 +40,18 @@ def test_a_part_with_no_two_handles_is_not_a_tool():
     from bevell3d.tool_fingers import handles
     with pytest.raises(ValueError, match="No two handles"):
         handles(_mesh(bracket))
+
+
+def test_the_so101_works_the_scissors_in_simulation(tmp_path):
+    """MuJoCo, the SO-101's own jaws: a small gripper opening opens the blades enough for paper,
+    the loop's ball joint holds, and the rail the loop slides along fits on the finger."""
+    import os
+    from tools.make_parts import scissors
+    from bevell3d.scissors_sim import tune
+    if not os.path.exists("third_party/so101/assets/moving_jaw_so101_v1.stl"):
+        pytest.skip("SO-101 files not present")
+    _mesh(scissors).export(tmp_path / "model.stl")
+    xml, rep = tune(str(tmp_path))
+    assert rep["held"] and rep["blades_open_deg"] >= 15, {k: rep[k] for k in ("blades_open_deg", "joint_gap_max_mm")}
+    assert 3 < rep["gripper_open_deg"] < 21
+    assert 5 < rep["rail_mm"] < 60, rep["rail_mm"]

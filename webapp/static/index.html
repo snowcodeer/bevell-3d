@@ -612,8 +612,11 @@ function fingersCard(st, s, f) {
     card.innerHTML = `<div class="small muted">SO-101 · ${tf.loops ? "through the finger loops" : "round the handles"}</div>
       <div class="facts"><div class="fact"><b>${tf.jaw_gap_mm.toFixed(1)} mm</b><span>jaw gap, tool closed</span></div>
       <div class="fact"><b>${tf.grip_mm.map((w) => w.toFixed(1)).join(" + ")} mm</b><span>${tf.loops ? "loop rings" : "handles"} gripped</span></div></div>
-      <ol class="steps"><li>Print both saddles (PLA, back down, no supports).</li><li>Tape one inside each jaw, near the tip, grooves facing.</li>
-      <li>Set the gripper to ${tf.jaw_gap_mm.toFixed(0)} mm, lay the handles in the grooves and zip-tie each one in${tf.loops ? ", through its loop" : ""}.</li>
+      ${tf.sim ? `<div class="facts"><div class="fact"><b>${(tf.sim.gripper_open_rad[0] * 57.2958).toFixed(0)}° → ${(tf.sim.gripper_open_rad[1] * 57.2958).toFixed(0)}°</b><span>gripper, closed to open</span></div>
+      <div class="fact"><b>${tf.sim.blades_open_deg.toFixed(0)}°</b><span>blades open, tested in MuJoCo</span></div></div>` : ""}
+      <ol class="steps"><li>Print both saddles (PLA, back down, no supports).</li>
+      <li>${tf.sim ? `The long one (a ${tf.sim.rail_mm.toFixed(0)} mm rail) goes inside the moving jaw, its extra length towards the tip; the short one inside the fixed jaw.` : "Tape one inside each jaw, near the tip, grooves facing."}</li>
+      <li>Set the gripper to ${tf.jaw_gap_mm.toFixed(0)} mm, lay the handles in the grooves and zip-tie each one in${tf.loops ? ", through its loop" : ""}${tf.sim ? ": tight on the fixed jaw, loose on the rail so the loop can slide along it" : ""}.</li>
       <li>Open and close the gripper: the tool opens and closes with it.</li></ol>
       <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["tool_fingers.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["tool_fingers.3mf"]}" download>Fingers 3MF</a>${f["tool_fingers.step"] ? `<a class="chip" href="${f["tool_fingers.step"]}" download>STEP</a>` : ""}</div>`;
   } else if (st.mode === "gripper") {

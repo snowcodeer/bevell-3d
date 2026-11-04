@@ -32,6 +32,7 @@ image = (
     .add_local_dir(os.path.join(ROOT, "bevell3d"), "/root/bevell3d")
     .add_local_dir(os.path.join(ROOT, "webapp"), "/root/webapp")
     .add_local_dir(os.path.join(ROOT, "assets"), "/root/assets")
+    .add_local_dir(os.path.join(ROOT, "third_party"), "/root/third_party")     # the SO-101 gripper, for the scissors simulation
 )
 
 
