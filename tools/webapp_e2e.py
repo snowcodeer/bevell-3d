@@ -1,7 +1,7 @@
 """End to end through the web app's API: upload photos, wait for the scan, download and open
 every file it offers.
 
-    .venv/bin/python -m tools.webapp_e2e out/bench/bottle/photos [--base http://127.0.0.1:8300] [--agent]
+    .venv/bin/python -m tools.webapp_e2e out/bench/bottle/photos [--base http://127.0.0.1:8300] [--agent] [--passcode X]
 """
 import argparse, glob, io, json, os, sys, tempfile, time
 import requests
@@ -45,10 +45,11 @@ def check_file(name, data):
         os.remove(path)
 
 
-def main(photo_dir, base, agent=False):
+def main(photo_dir, base, agent=False, passcode=""):
+    auth = {"x-passcode": passcode} if passcode else {}
     photos = sorted(glob.glob(os.path.join(photo_dir, "*.jpg")))
     t0 = time.time()
-    r = requests.post(base + "/api/scans", files=[("photos", (os.path.basename(p), open(p, "rb"), "image/jpeg")) for p in photos], timeout=120)
+    r = requests.post(base + "/api/scans", files=[("photos", (os.path.basename(p), open(p, "rb"), "image/jpeg")) for p in photos], headers=auth, timeout=300)
     assert r.ok, r.text
     sid = r.json()["id"]
     print(f"uploaded {len(photos)} photos -> scan {sid}")
@@ -64,7 +65,7 @@ def main(photo_dir, base, agent=False):
     s = st["summary"]
     print(f"done in {time.time() - t0:.0f} s: {s['plan']['object']!r}, {s['plan']['route']}, model {s['model_mm']} mm from {s['model_source']}, CAD {s.get('cad', {}).get('kind')}")
     if agent:
-        requests.post(f"{base}/api/scans/{sid}/agent", timeout=30).raise_for_status()
+        requests.post(f"{base}/api/scans/{sid}/agent", headers=auth, timeout=30).raise_for_status()
         while True:
             st = requests.get(f"{base}/api/scans/{sid}", timeout=30).json()
             a = st.get("agent") or {}
@@ -89,6 +90,7 @@ def main(photo_dir, base, agent=False):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("photos"); ap.add_argument("--base", default="http://127.0.0.1:8300"); ap.add_argument("--agent", action="store_true")
+    ap.add_argument("--passcode", default=os.environ.get("BEVELL3D_PASSCODE", ""))
     a = ap.parse_args()
-    sid, bad = main(a.photos, a.base, a.agent)
+    sid, bad = main(a.photos, a.base, a.agent, a.passcode)
     sys.exit(1 if bad else 0)
