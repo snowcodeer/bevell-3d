@@ -136,6 +136,32 @@ def ring_order(pts):
     return pts[i:] + pts[:i]
 
 
+def _tightest_bend(edge, n=400):
+    """The smallest radius of curvature along a path, from circles through neighbouring samples."""
+    pts = []
+    for e in (edge.Edges() if hasattr(edge, "Edges") else [edge]):
+        ad = e._geomAdaptor(); a, b = ad.FirstParameter(), ad.LastParameter()
+        pts += [q.toTuple() for q in e.positions([a + t * (b - a) for t in np.linspace(0, 1, n)], mode="parameter")]
+    P = np.array(pts)
+    if len(P) < 3:
+        return float("inf")
+    A, B, C = P[:-2], P[1:-1], P[2:]
+    area = np.linalg.norm(np.cross(B - A, C - A), axis=1) / 2
+    R = np.linalg.norm(B - A, axis=1) * np.linalg.norm(C - B, axis=1) * np.linalg.norm(A - C, axis=1) / np.maximum(4 * area, 1e-12)
+    return float(R[area > 1e-9].min()) if (area > 1e-9).any() else float("inf")
+
+
+def _section_radius(shape, p):
+    """How far a sweep's section reaches from the path."""
+    if "circle" in shape:
+        return ev(shape["circle"]["d"], p) / 2
+    for k in ("ellipse", "rect"):
+        if k in shape:
+            return max(ev(shape[k]["w"], p), ev(shape[k]["l"], p)) / 2
+    pts = shape.get("polygon") or shape.get("spline") or [[0, 0]]
+    return max(math.hypot(ev(x, p), ev(y, p)) for x, y in pts)
+
+
 def _path_points(path, p):
     pts = [(ev(a, p), ev(b, p)) for a, b in path["points"]]
     return [(a, 0.0, b) for a, b in pts] if path.get("plane", "XZ") == "XZ" else [(0.0, a, b) for a, b in pts]
@@ -183,8 +209,21 @@ def to_cadquery(tree, p):
             combine(cq.Workplane("XY").add(solid), mode)
         elif op == "sweep":
             pts = _path_points(s["path"], p)
-            path = cq.Workplane("XY").spline(pts, includeCurrent=False) if len(pts) > 2 else cq.Workplane("XY").polyline(pts)
-            t = cq.Vector(*pts[1]) - cq.Vector(*pts[0])
+            # A path that ends where it starts is one smooth closed curve. Drawn open, it kinked
+            # where it met itself, and the clock's loop handle joined the body unmeshable, so the
+            # agent scored a clock with no handle.
+            closed = len(pts) > 3 and math.dist(pts[0], pts[-1]) < 1e-6
+            if closed:
+                path = cq.Workplane("XY").spline(pts[:-1], periodic=True, includeCurrent=False)
+            else:
+                path = cq.Workplane("XY").spline(pts, includeCurrent=False) if len(pts) > 2 else cq.Workplane("XY").polyline(pts)
+            bend, size = _tightest_bend(path.val()), _section_radius(s["section"], p)
+            if bend < size * 1.05:
+                # The tube folds through itself; Fusion refuses it ("reduce the taper angle, or
+                # remove regions of high curvature"), so refuse it here too, as the mug's handle.
+                raise ValueError(f"sweep {s.get('id')!r} bends tighter ({bend:.0f} mm radius) than its section "
+                                 f"({size:.0f} mm): add path points to round the bend, or thin the section")
+            t = path.val().tangentAt(0)                  # the path's own direction, as Fusion orients it
             xdir = cq.Vector(0, 1, 0) if s["path"].get("plane", "XZ") == "XZ" else cq.Vector(1, 0, 0)
             plane = cq.Plane(origin=cq.Vector(*pts[0]), xDir=xdir, normal=t.normalized())
             combine(_shape_cq(cq.Workplane(plane), s["section"], p).sweep(path, transition="round"), mode)
@@ -379,10 +418,13 @@ def build(ui=None, close=False):
                     sk = root.sketches.add(root.xZConstructionPlane if xz else root.yZConstructionPlane); sk.name = s.get("id", "sweep") + " path"
                     # XZ: sketch (x, -z); YZ: sketch (-z, y).
                     world = [(cm(a), 0.0, cm(b)) if xz else (0.0, cm(a), cm(b)) for a, b in s["path"]["points"]]
+                    closed = len(world) > 3 and math.dist(world[0], world[-1]) < 1e-7
                     spts = adsk.core.ObjectCollection.create()
-                    for x, y, z in world:
+                    for x, y, z in (world[:-1] if closed else world):
                         spts.add(P(x, -z) if xz else P(-z, y))
                     curve = sk.sketchCurves.sketchFittedSplines.add(spts) if len(world) > 2 else sk.sketchCurves.sketchLines.addByTwoPoints(spts.item(0), spts.item(1))
+                    if closed:
+                        curve.isClosed = True
                     path = F.createPath(curve)
                     pi = root.constructionPlanes.createInput(); pi.setByDistanceOnPath(path, adsk.core.ValueInput.createByReal(0))
                     spl = root.constructionPlanes.add(pi); spl.name = s.get("id", "sweep") + " section plane"

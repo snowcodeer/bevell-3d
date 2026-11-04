@@ -48,7 +48,10 @@ SPLINE_LOFT = {
 
 def cases():
     out = [("bottle (hand-written)", BOTTLE), ("mug (hand-written)", MUG), ("loft, cut, chamfer", LOFT_CUT), ("block, ellipse, polygon cut, fillet", BLOCK), ("spline loft, slot cut", SPLINE_LOFT)]
-    for name, path in (("bottle (Muse Spark)", "out/bench/bottle/timed/agent_tree.json"), ("mouse (Muse Spark)", "out/bench/mouse/full/agent_tree.json")):
+    for name, path in (("bottle (Muse Spark)", "out/bench/bottle/timed/agent_tree.json"), ("mouse (Muse Spark)", "out/bench/mouse/full/agent_tree.json"),
+                       ("lens (Muse Spark)", "out/bench/camera/full/agent_tree.json"), ("mug (Muse Spark)", "out/bench/mug/tree/agent_tree.json"),
+                       ("clock (Muse Spark)", "out/bench/clock/full/agent_tree.json"), ("mouse, richer brief", "out/bench/mouse/rich/agent_tree.json"),
+                       ("clock, richer brief", "out/bench/clock/rich/agent_tree.json")):
         try:
             out.append((name, json.load(open(path))))
         except FileNotFoundError:
@@ -78,7 +81,16 @@ def main(keep=False, only=None):
         p = {q["name"]: q["value"] for q in tree["parameters"]}
         t = time.time()
         fusion = requests.post(BRIDGE + "/build", json={"script": to_fusion_script(tree, p, name), "close": not keep}, timeout=320).json()
-        cq = cadquery_report(tree, p)
+        try:
+            cq = cadquery_report(tree, p)
+        except ValueError as e:
+            # A tree CadQuery refuses (a sweep that folds, a loft that swings out) must fail in
+            # Fusion too; Fusion building it would mean the check is wrong.
+            fusion_failed = bool(fusion.get("errors") or fusion.get("fatal"))
+            rows.append({"case": name, "ok": fusion_failed, "notes": [f"both refuse: {e}" if fusion_failed else f"CadQuery refuses ({e}) but Fusion builds it"],
+                         "seconds": round(time.time() - t, 1)})
+            print(("PASS " if fusion_failed else "FAIL ") + name.ljust(38), rows[-1]["notes"][0][:150], flush=True)
+            continue
         ok, why = True, []
         if fusion.get("fatal"):
             ok, why = False, ["fatal: " + fusion["fatal"].strip().splitlines()[-1]]
