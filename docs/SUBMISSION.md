@@ -46,8 +46,8 @@ none of its services for the pipeline. The README says so at the top.
 - Judges: the passcode is in the form's notes.
 - Everyone else can run a scan with their own Meta Model API key, or with a Bevell API key
   from a Bevell Unlimited subscription.
-- A finished gripper run on a real pair of scissors:
-  https://nataliechan1963--bevell-3d-web.us-east.modal.run/#result/f684f76b871f
+- A finished gripper run on a real pair of scissors (the dark pair in the video):
+  https://nataliechan1963--bevell-3d-web.us-east.modal.run/#result/7e1fecb3bde2
 
 **Describe your use of Meta products**
 
