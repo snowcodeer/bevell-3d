@@ -183,6 +183,16 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
     summary["timings_s"] = timings
     progress("done", "ready")
     summary.update(model_source=source, model_mm=[round(float(e), 1) for e in final.bounds[1] - final.bounds[0]], holder=hrep)
+    # The size to show: length and width along the object's own outline (its tightest box from
+    # above) and its height, not along the sheet's edges (a tool lying at an angle read 118 mm for
+    # 153). model_mm stays as it was: the benchmark compares it with the true shape's.
+    try:
+        from .cad import footprint
+        r = np.array(footprint(final).minimum_rotated_rectangle.exterior.coords)[:4]
+        lw = sorted([float(np.linalg.norm(r[1] - r[0])), float(np.linalg.norm(r[2] - r[1]))], reverse=True)
+        summary["size_mm"] = [round(lw[0], 1), round(lw[1], 1), round(float(final.extents[2]), 1)]
+    except Exception:
+        pass
     render(final, os.path.join(out_dir, "model.png"), f"{plan['object']} ({source})")
     render_scene([(holder, (0.85, 0.85, 0.88)), (seated(final), (0.22, 0.35, 0.95))],
                  os.path.join(out_dir, "holder.png"), f"Holder for the {plan['object']}")

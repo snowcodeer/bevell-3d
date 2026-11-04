@@ -45,11 +45,12 @@ def check_file(name, data):
         os.remove(path)
 
 
-def main(photo_dir, base, agent=False, passcode=""):
+def main(photo_dir, base, agent=False, passcode="", mode="scan"):
     auth = {"x-passcode": passcode} if passcode else {}
     photos = sorted(glob.glob(os.path.join(photo_dir, "*.jpg")))
     t0 = time.time()
-    r = requests.post(base + "/api/scans", files=[("photos", (os.path.basename(p), open(p, "rb"), "image/jpeg")) for p in photos], headers=auth, timeout=300)
+    r = requests.post(base + "/api/scans", files=[("photos", (os.path.basename(p), open(p, "rb"), "image/jpeg")) for p in photos], data={"mode": mode},
+                      headers=auth, timeout=300)
     assert r.ok, r.text
     sid = r.json()["id"]
     print(f"uploaded {len(photos)} photos -> scan {sid}")
@@ -91,6 +92,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("photos"); ap.add_argument("--base", default="http://127.0.0.1:8300"); ap.add_argument("--agent", action="store_true")
     ap.add_argument("--passcode", default=os.environ.get("BEVELL3D_PASSCODE", ""))
+    ap.add_argument("--mode", default="scan", choices=["scan", "gripper"], help="gripper: custom robot grippers for a tool")
     a = ap.parse_args()
-    sid, bad = main(a.photos, a.base, a.agent, a.passcode)
+    sid, bad = main(a.photos, a.base, a.agent, a.passcode, a.mode)
     sys.exit(1 if bad else 0)

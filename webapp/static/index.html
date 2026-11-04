@@ -642,7 +642,7 @@ async function resultScreen(id) {
   if (!s) return go("making", id);
   $("r-title").textContent = `Your ${s.plan.object} is ready`;
   $("facts").innerHTML = [
-    [s.model_mm.map((v) => v.toFixed(1)).join(" × ") + " mm", "size", true],
+    [(s.size_mm || s.model_mm).map((v) => v.toFixed(1)).join(" × ") + " mm", s.size_mm ? "length × width × height" : "size", true],
     [s.cad ? CAD[s.cad.kind] : "STL only", "CAD"], [`${s.scan.posed}/${s.scan.photos}`, "photos used"],
   ].map(([b, t, wide]) => `<div class="fact${wide ? " wide" : ""}"><b>${b}</b><span>${t}</span></div>`).join("");
   $("r-plan").innerHTML = planHTML(s.plan);
