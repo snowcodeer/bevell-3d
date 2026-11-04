@@ -33,7 +33,9 @@ p { margin: 0; }
 .top { position: sticky; top: 0; z-index: 5; background: rgb(20 22 26 / .92); backdrop-filter: blur(10px);
   padding: calc(10px + env(safe-area-inset-top, 0px)) var(--gutter) 10px; display: grid; gap: 10px; }
 .top-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
-.back { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font-size: 18px; cursor: pointer; display: grid; place-items: center; }
+.back { width: 36px; height: 36px; padding: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; display: grid; place-items: center; line-height: 0; }
+.back svg { display: block; }
+.back:hover { border-color: var(--accent); }
 .brand { display: flex; align-items: center; gap: 8px; }
 .brand img.mark { height: 24px; } .brand img.word { height: 12px; }
 .badge { font-size: 11px; font-weight: 600; color: var(--accent-pale); background: rgb(57 90 246 / .14); padding: 2px 8px; border-radius: 999px; }
@@ -115,6 +117,45 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 .phone-only { display: none; }
 @media (pointer: coarse) { .phone-only { display: block; } .desk-only { display: none !important; } }
 [hidden] { display: none !important; }
+/* Guided camera: the live view with the sheet's outline for each angle, as identity checks guide a photo. */
+body.camopen { overflow: hidden; }
+.camview { position: fixed; inset: 0; z-index: 50; background: #000; overflow: hidden; color: #fff; }
+.camview[hidden] { display: none; }
+.camview video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#cv-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.camview .g { stroke: #fff; transition: stroke .2s; }
+.camview.ok .g { stroke: var(--ok); }
+.cv-top { position: absolute; inset: 0 0 auto 0; padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 26px;
+  display: flex; align-items: flex-start; gap: 12px; background: linear-gradient(rgb(0 0 0 / .65), transparent); }
+.cv-close { width: 38px; height: 38px; flex: none; padding: 0; border-radius: 12px; border: 0; background: rgb(20 22 26 / .6); color: #fff;
+  display: grid; place-items: center; line-height: 0; cursor: pointer; }
+.cv-head { display: grid; gap: 1px; padding-top: 1px; }
+.cv-head .ring { color: var(--accent-pale); }
+.cv-head b { font: 700 22px var(--display); }
+#cv-dial { width: 78px; height: 80px; margin-left: auto; flex: none; background: rgb(20 22 26 / .6); border-radius: 14px; }
+.cv-text { position: absolute; left: 18px; right: 18px; bottom: calc(124px + env(safe-area-inset-bottom, 0px)); text-align: center;
+  font: 600 17px/1.35 var(--body); text-shadow: 0 1px 4px rgb(0 0 0 / .9); text-wrap: balance; }
+.cv-bottom { position: absolute; inset: auto 0 0 0; padding: 18px 22px calc(22px + env(safe-area-inset-bottom, 0px));
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; background: linear-gradient(transparent, rgb(0 0 0 / .7)); }
+.cv-shutter { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; background: rgb(255 255 255 / .22); cursor: pointer;
+  box-shadow: inset 0 0 0 4px rgb(0 0 0 / .3); transition: transform .08s, background .08s; }
+.cv-shutter:active { transform: scale(.93); background: #fff; }
+.cv-shutter:disabled { opacity: .5; }
+#cv-last { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 2px solid rgb(255 255 255 / .75); justify-self: start; }
+#cv-last:not([src]) { visibility: hidden; }
+.cv-done { justify-self: end; font: 600 16px var(--body); color: #fff; background: none; border: 0; padding: 12px 4px; cursor: pointer; }
+.cv-done:disabled { opacity: .35; cursor: default; }
+.cv-tilt { position: absolute; right: 16px; top: 34%; height: 30%; width: 6px; border-radius: 3px; background: rgb(255 255 255 / .28); }
+.cv-tilt i { position: absolute; left: -5px; right: -5px; height: 26%; transform: translateY(-50%); border-radius: 8px; background: rgb(111 211 165 / .38); }
+.cv-tilt b { position: absolute; left: 50%; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: var(--warn);
+  transform: translate(-50%, -50%); transition: top .12s linear, background .2s; }
+.cv-tilt b.ok { background: var(--ok); }
+.cv-tilt span { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); white-space: nowrap; font: 600 12px var(--body);
+  text-shadow: 0 1px 3px rgb(0 0 0 / .9); }
+.cv-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.cv-flash.on { animation: cvflash .28s ease-out; }
+@keyframes cvflash { from { opacity: .75; } to { opacity: 0; } }
+.cv-msg { position: absolute; left: 18px; right: 18px; top: 45%; text-align: center; font: 600 16px var(--body); }
 </style>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
@@ -122,7 +163,7 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 <div class="app">
   <header class="top">
     <div class="top-row">
-      <button class="back" id="back" aria-label="Back" hidden>←</button>
+      <button class="back" id="back" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M14.5 6 8.5 12l6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="brand"><img class="mark" src="/static/logo-icon.svg" alt=""><img class="word" src="/static/bevell-wordmark.svg" alt="Bevell"><span class="badge">3D</span></div>
       <span class="stepname" id="stepname"></span>
     </div>
@@ -235,6 +276,24 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
   </main>
 
   <footer class="actions" id="actions"></footer>
+  <div class="camview" id="camview" hidden>
+    <video id="cv-video" playsinline autoplay muted></video>
+    <svg id="cv-overlay" aria-hidden="true"></svg>
+    <div class="cv-flash" id="cv-flash"></div>
+    <p class="cv-msg" id="cv-msg" hidden></p>
+    <div class="cv-top">
+      <button class="cv-close" id="cv-close" aria-label="Close the camera"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+      <div class="cv-head"><span class="ring" id="cv-ring"></span><b id="cv-count"></b></div>
+      <svg id="cv-dial" viewBox="-80 -84 160 164" role="img" aria-label="Where to stand, seen from above"></svg>
+    </div>
+    <div class="cv-tilt" id="cv-tilt" hidden><i id="cv-tilt-target"></i><b id="cv-tilt-dot"><span id="cv-tilt-text"></span></b></div>
+    <p class="cv-text" id="cv-text"></p>
+    <div class="cv-bottom">
+      <img id="cv-last" alt="">
+      <button class="cv-shutter" id="cv-shutter" aria-label="Take this photo"></button>
+      <button class="cv-done" id="cv-done">Done</button>
+    </div>
+  </div>
 </div>
 
 <script type="module">
@@ -260,6 +319,7 @@ function show() {
   const [raw = "start", id] = location.hash.slice(1).split("/");
   let name = ORDER.includes(raw) ? raw : "start";
   if (name === "review" && !files.length) name = "shoot";
+  if (name !== "shoot" && !$("camview").hidden) closeCamera(false);   // the back gesture leaves the camera too
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.dataset.screen === name));
   $("stepname").textContent = NAMES[name];
   $("bar").style.width = `${Math.round((ORDER.indexOf(name) / (ORDER.length - 1)) * 100)}%`;
@@ -302,21 +362,28 @@ const SHOTS = [
   { ring: "FROM ABOVE", r: 12, a: 270, text: "Straight down, turned round." },
 ];
 const urls = new Map(), thumb = (f) => { if (!urls.has(f)) urls.set(f, URL.createObjectURL(f)); return urls.get(f); };
+// The top view of the sheet with a dot for every photo: done, next and still to take.
+function dialSVG(n, caption) {
+  const dot = (x, y, st) => `<circle cx="${x}" cy="${y}" r="${st === "next" ? 8.5 : 5.5}" fill="${st === "done" ? "#6fd3a5" : st === "next" ? "#395af6" : "none"}" stroke="${st === "todo" ? "#5a606b" : st === "next" ? "#8095f9" : "none"}" stroke-width="${st === "next" ? 3 : 1.5}"/>`;
+  let g = (caption ? `<text x="0" y="79" text-anchor="middle" font-size="8" fill="#9aa1ad" font-family="Inter, sans-serif">seen from above</text>` : "")
+    + `<rect x="-60" y="-42" width="120" height="84" rx="4" fill="#eceef2" opacity=".14"/><rect x="-14" y="-10" width="28" height="20" rx="5" fill="#9aa1ad"/>`;
+  SHOTS.forEach((s, i) => { g += dot((Math.cos((s.a * Math.PI) / 180) * s.r).toFixed(1), (-Math.sin((s.a * Math.PI) / 180) * s.r).toFixed(1), i < n ? "done" : i === n ? "next" : "todo"); });
+  return g;
+}
 function shootScreen() {
   const n = files.length, done = n >= SHOTS.length, shot = SHOTS[Math.min(n, SHOTS.length - 1)];
   $("g-ring").textContent = done ? "ALL 16 TAKEN" : shot.ring;
   $("g-count").textContent = done ? `${n} photos` : `Photo ${n + 1} of 16`;
   $("g-text").textContent = done ? "All done." : shot.text;
-  const dot = (x, y, st) => `<circle cx="${x}" cy="${y}" r="${st === "next" ? 8.5 : 5.5}" fill="${st === "done" ? "#6fd3a5" : st === "next" ? "#395af6" : "none"}" stroke="${st === "todo" ? "#5a606b" : st === "next" ? "#8095f9" : "none"}" stroke-width="${st === "next" ? 3 : 1.5}"/>`;
-  let g = `<text x="0" y="79" text-anchor="middle" font-size="8" fill="#9aa1ad" font-family="Inter, sans-serif">seen from above</text><rect x="-60" y="-42" width="120" height="84" rx="4" fill="#eceef2" opacity=".14"/><rect x="-14" y="-10" width="28" height="20" rx="5" fill="#9aa1ad"/>`;
-  SHOTS.forEach((s, i) => { g += dot((Math.cos((s.a * Math.PI) / 180) * s.r).toFixed(1), (-Math.sin((s.a * Math.PI) / 180) * s.r).toFixed(1), i < n ? "done" : i === n ? "next" : "todo"); });
-  $("dial").innerHTML = g;
+  $("dial").innerHTML = dialSVG(n, true);
   $("strip").innerHTML = files.map((f) => /heic|heif/i.test(f.name) ? `<div>HEIC</div>` : `<img alt="" src="${thumb(f)}">`).join("");
   $("strip").scrollLeft = 1e6;
   const take = button(done ? "Another photo" : `Take photo ${n + 1}`, "primary", () => $("cam").click());
   const pick = button("From your photos", "ghost", () => $("file").click());
   const review = button(`Done · ${n} photos`, "primary", () => go("review"));
-  if (COARSE) actions(...(n >= 8 ? [take, review] : [take, pick]));
+  const guided = button(n ? `Guided camera · photo ${Math.min(n + 1, 16)}` : "Open the guided camera", "primary", openCamera);
+  if (COARSE && CAN_GUIDE) actions(...(n >= 8 ? [n < SHOTS.length ? guided : take, review] : [guided, pick]));
+  else if (COARSE) actions(...(n >= 8 ? [take, review] : [take, pick]));
   else actions(...(n >= 8 ? [review, pick] : [button("Choose photos", "primary", () => $("file").click())]));
 }
 function addFiles(list) {
@@ -325,6 +392,115 @@ function addFiles(list) {
   shootScreen();
 }
 $("cam").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+
+// ---------- guided camera: a live view with the sheet's outline for each angle ----------
+// A guide, not a measurement: the sheet's markers place the camera afterwards, whatever the framing.
+const CAN_GUIDE = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const TILT = { "45° UP": 45, "LOW, NEAR THE TABLE": 12, "FROM ABOVE": 82 };   // degrees the camera looks below level
+const GUIDE_TEXT = { "45° UP": "Fit the sheet in the outline, phone at 45°.", "LOW, NEAR THE TABLE": "Crouch low: phone nearly level with the table.",
+                     "FROM ABOVE": "Hold the phone flat, straight above the sheet." };
+let camStream = null, tiltDown = null, capturing = false;
+function onTilt(e) {
+  if (e.beta == null || e.gamma == null) return;
+  const r = Math.PI / 180;            // how far below level the back camera looks, in any phone orientation
+  tiltDown = Math.asin(Math.max(-1, Math.min(1, Math.cos(e.beta * r) * Math.cos(e.gamma * r)))) / r;
+  drawTilt();
+}
+function sheetQuad(ring, W, H) {
+  // Where the A4 sheet should sit in the frame from this ring: wide and near at the bottom.
+  const w = Math.min(W * 0.9, H * 1.3), cx = W / 2, cy = H * 0.55;
+  const [top, depth] = ring.startsWith("45") ? [0.72, 0.42] : ring.startsWith("LOW") ? [0.8, 0.13] : [1, 0.707];
+  const h = w * depth, hw = w / 2, ht = (w * top) / 2;
+  return [[cx - ht, cy - h / 2], [cx + ht, cy - h / 2], [cx + hw, cy + h / 2], [cx - hw, cy + h / 2]];
+}
+function drawGuide() {
+  const n = files.length, shot = SHOTS[Math.min(n, SHOTS.length - 1)], v = $("camview"), W = v.clientWidth, H = v.clientHeight;
+  const q = sheetQuad(shot.ring, W, H), f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+  const quad = `M${q.map(f).join(" L")} Z`;
+  const c = [(q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4];
+  // Corner brackets: a short stroke along each edge from every corner.
+  const L = Math.min(W, H) * 0.06, br = q.map((p, i) => {
+    const a = q[(i + 1) % 4], b = q[(i + 3) % 4], u = (o) => { const d = Math.hypot(o[0] - p[0], o[1] - p[1]) || 1; return [p[0] + ((o[0] - p[0]) / d) * L, p[1] + ((o[1] - p[1]) / d) * L]; };
+    return `<path class="g" d="M${f(u(a))} L${f(p)} L${f(u(b))}" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }).join("");
+  const ow = Math.max(22, Math.abs(q[2][0] - q[3][0]) * 0.12);
+  const oh = shot.ring === "FROM ABOVE" ? ow * 0.75 : Math.max(16, Math.abs(q[2][1] - q[1][1]) * 0.45, ow * 0.7);
+  const ov = $("cv-overlay"); ov.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  ov.innerHTML = `<path d="M0 0H${W}V${H}H0Z ${quad}" fill="rgb(0 0 0 / .42)" fill-rule="evenodd"/>`
+    + `<path class="g" d="${quad}" fill="none" stroke-width="1.6" stroke-dasharray="7 7" opacity=".85"/>${br}`
+    + `<rect class="g" x="${(c[0] - ow / 2).toFixed(1)}" y="${(c[1] - oh / 2).toFixed(1)}" width="${ow.toFixed(1)}" height="${oh.toFixed(1)}" rx="6" fill="none" stroke-width="2" stroke-dasharray="4 4"/>`;
+  $("cv-ring").textContent = shot.ring;
+  $("cv-count").textContent = `Photo ${Math.min(n + 1, 16)} of 16`;
+  const first = !n || SHOTS[n - 1].ring !== shot.ring;
+  $("cv-text").textContent = first ? GUIDE_TEXT[shot.ring] : `${shot.text} Keep the sheet in the outline.`;
+  $("cv-dial").innerHTML = dialSVG(n, false);
+  $("cv-done").disabled = n < 8;
+  const last = files[n - 1];
+  if (last && !/heic|heif/i.test(last.name)) $("cv-last").src = thumb(last); else $("cv-last").removeAttribute("src");
+  drawTilt();
+}
+function drawTilt() {
+  const shot = SHOTS[Math.min(files.length, SHOTS.length - 1)], want = TILT[shot.ring], on = tiltDown != null;
+  $("cv-tilt").hidden = !on;
+  $("camview").classList.toggle("ok", on && Math.abs(tiltDown - want) <= 12);
+  if (!on) return;
+  const ok = Math.abs(tiltDown - want) <= 12, pos = (d) => `${(Math.max(0, Math.min(90, d)) / 90) * 100}%`;
+  $("cv-tilt-target").style.top = pos(want);
+  $("cv-tilt-dot").style.top = pos(tiltDown);
+  $("cv-tilt-dot").classList.toggle("ok", ok);
+  $("cv-tilt-text").textContent = ok ? "Angle good" : tiltDown < want ? "Aim lower" : "Aim higher";
+}
+async function openCamera() {
+  // Motion access is asked for on this tap (iOS needs it); without it the guide works, just with no tilt meter.
+  try {
+    const perm = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission ? await DeviceOrientationEvent.requestPermission() : "granted";
+    if (perm === "granted") addEventListener("deviceorientation", onTilt);
+  } catch { /* no motion sensor: the guide still works */ }
+  $("camview").hidden = false; document.body.classList.add("camopen"); $("cv-msg").hidden = true;
+  drawGuide();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 4096 }, height: { ideal: 3072 } } });
+    $("cv-video").srcObject = camStream;
+    $("cv-shutter").disabled = false;
+  } catch (err) {
+    $("cv-msg").hidden = false; $("cv-shutter").disabled = true;
+    $("cv-msg").textContent = "The camera could not start. Close this and use “Take photo” instead.";
+  }
+}
+function closeCamera(refresh = true) {
+  camStream?.getTracks().forEach((t) => t.stop()); camStream = null;
+  removeEventListener("deviceorientation", onTilt); tiltDown = null;
+  $("cv-video").srcObject = null; $("camview").hidden = true; document.body.classList.remove("camopen");
+  if (refresh) shootScreen();
+}
+async function capture() {
+  const video = $("cv-video");
+  if (capturing || !camStream || !video.videoWidth) return;
+  capturing = true; $("cv-shutter").disabled = true;
+  try {
+    let blob = null;
+    try {   // a still at the sensor's full resolution where the browser offers one (Chrome on Android)
+      if ("ImageCapture" in window) blob = await new ImageCapture(camStream.getVideoTracks()[0]).takePhoto();
+    } catch { blob = null; }
+    if (!blob) {   // otherwise the video frame, at the size the camera streams it
+      const cv = document.createElement("canvas"); cv.width = video.videoWidth; cv.height = video.videoHeight;
+      cv.getContext("2d").drawImage(video, 0, 0);
+      blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.93));
+    }
+    const n = files.length;
+    files = [...files, new File([blob], `guided_${String(n + 1).padStart(2, "0")}.jpg`, { type: "image/jpeg", lastModified: Date.now() })];
+    $("cv-flash").classList.remove("on"); void $("cv-flash").offsetWidth; $("cv-flash").classList.add("on");
+    navigator.vibrate?.(25);
+    if (files.length >= SHOTS.length) { closeCamera(); go("review"); return; }
+    drawGuide();
+  } finally {
+    capturing = false; if (camStream) $("cv-shutter").disabled = false;
+  }
+}
+$("cv-shutter").onclick = capture;
+$("cv-close").onclick = closeCamera;
+$("cv-done").onclick = () => { closeCamera(); go("review"); };
+addEventListener("resize", () => { if (!$("camview").hidden) drawGuide(); });
 $("file").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
 
 function reviewScreen() {
@@ -376,7 +552,7 @@ function makingScreen(id) {
     const done = new Set(st.done || []), route = st.plan?.route;
     $("stages").innerHTML = STAGES.filter(([k]) => !(route === "revolved" && (k === "sam3d" || k === "fit")) && !(route && route !== "revolved" && k === "revolve"))
       .map(([k, l]) => `<li class="${done.has(k) ? "done" : st.stage === k ? "active" : ""}"><span class="dot"></span><span>${l}</span></li>`).join("");
-    $("m-elapsed").textContent = st.state === "queued" ? "Next in line…" : `${Math.round(st.elapsed || 0)} s · usually 1–3 min`;
+    $("m-elapsed").textContent = st.state === "queued" ? "Next in line…" : `${Math.round(st.elapsed || 0)} s · usually 3–5 min`;
     if (st.plan) { $("m-plan").hidden = false; $("m-plan").innerHTML = planHTML(st.plan); }
     if (st.state === "failed") { $("m-err").textContent = `Didn't work: ${st.error}`; $("m-err").hidden = false; actions(button("Take the photos again", "primary", () => { files = []; go("shoot"); })); return; }
     polling = setTimeout(tick, 1500);
