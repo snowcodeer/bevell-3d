@@ -47,7 +47,8 @@ photos on the capture sheet
   -> 22 ArUco markers: the camera's focal length, and each photo's pose (0.2 to 0.3 mm)
   -> SAM 3.1 masks every photo
   -> visual hull (voxel carve), or a revolved profile, or SAM 3D fitted to the silhouettes
-  -> CAD: revolve, stacked extrusions, loft, or NURBS patches; the holder, pads and fixture
+  -> CAD: revolve, stacked extrusions, a loft that stays on the scan, or NURBS patches; the
+     holder, pads and fixture
   -> optional: Muse Spark writes an editable feature tree, tuned against the photos
 ```
 
@@ -74,7 +75,7 @@ whole pipeline with real model calls, then scored against the true meshes
 | Mug | NURBS | 0.4 | 3.6 | none | 1.8 |
 | Letter holder | NURBS | 2.4 | 4.8 | 0.41 | |
 | Fish toothbrush holder | NURBS | 1.3 | 4.4 | 0.74 | |
-| White mouse | loft | 6.4 | 1.5 | 1.6 | 2.2 |
+| White mouse | NURBS | 6.4 | 1.5 | 1.6 | 2.2 |
 
 - Camera positions within 0.2 to 0.3 mm (median). Size within 2 mm on 11 of 14 objects.
 - "Model to truth" is the mean distance from the true surface. Open insides a camera cannot

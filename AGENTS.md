@@ -184,7 +184,13 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 - **Model to STEP, tried in order:**
   1. Revolve, when every middle slice is one round loop about one axis. A ring gets a straight
      bore at the median measured radius.
-  2. Loft through 14 slice outlines resampled to 40 points from the same bearing.
+  2. Loft through 14 slice outlines resampled to 40 points from the same bearing. Kept only
+     if it stays on the scan (`_hugs`): its box within 4% of the scan's largest size (2 mm at
+     least) of the scan's, and 95% of its surface within the same. Until 4 Nov the volume
+     check alone decided, and lofts that swung far outside passed it: the servo's reached
+     30 mm past the scan in 60 pieces (volume 4% off, `isValid()` true), the white mouse's
+     spanned 233 mm on a 124 mm scan with half its surface 10 mm out, and a bottle's bulged
+     13.7 mm at the cap. All three now go to NURBS (0.04 to 0.06 mm from the scan).
   3. The mesh sewn into a closed solid, never more than about 4,000 triangles; 142,000 took
      four minutes.
   - Each candidate must match the mesh's volume within 8 to 10%.
@@ -312,6 +318,14 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     necks joined): the 160 mm ceiling cut the 162 mm clock, and a higher ceiling alone grew a
     floating tower over every object.
   - An unreadable photo is left out and named in the report (`photos/unreadable.json`).
+- **Looking closer** (`scan.look_closer`): a small object seen low down can be too few
+  pixels for SAM 3.1. On the 42 mm servo, with the whole sheet in view, it found nothing in
+  all eight low photos, with any prompt; the same photo cropped round the servo gave it at
+  0.86. A placed photo with no mask is asked again on a crop of the full-resolution original
+  round where a rough hull of the other photos puts the object, zoomed up to 4x, and the mask
+  counts only if 90% of it lies inside that hull's outline. The servo went from 8 to 16 of 16
+  photos and its hull to 0.68 mm from the true surface. Earlier runs lost photos the same
+  way (bracket 4, gear 2, five others 1). `report.json` lists them as `looked_closer`.
 - **Robot fixture** (`bevell3d/fixture.py`, every scan): finger reliefs on the grasp's squeeze
   axis sized from the SO-101 pads, a tab with a 30 mm recess for a printed ArUco tag (4x4, id
   40; `tag.pdf` marks the edge to stick towards the part), and `fixture.json` with the pick in

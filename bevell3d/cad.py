@@ -51,6 +51,25 @@ def _check(solid, mesh, tol=0.08):
     return ok, v
 
 
+def _hugs(solid, mesh, frac=0.04, floor=2.0, samples=2000):
+    """Whether a smooth fit stays on the scan. A loft through slices that change abruptly (a
+    servo's ears) swung 30 mm outside the scan, in 60 pieces, with its volume 4% off and
+    isValid() true, so neither check saw it. The fit's box must sit within `tol` of the
+    scan's, and 95% of its surface within `tol` of the scan, `tol` being 4% of the scan's
+    largest size or 2 mm, whichever is more."""
+    tol = max(floor, frac * float(np.max(mesh.extents)))
+    bb = solid.BoundingBox()
+    lo, hi = mesh.bounds
+    if (np.array([bb.xmin, bb.ymin, bb.zmin]) < lo - tol).any() or (np.array([bb.xmax, bb.ymax, bb.zmax]) > hi + tol).any():
+        return False, f"reaches {tol:.1f} mm past the scan"
+    vs, fs = solid.tessellate(0.2, 0.3)
+    m = trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs), process=False)
+    pts, _ = trimesh.sample.sample_surface(m, samples, seed=0)
+    _, d, _ = trimesh.proximity.closest_point(mesh, pts)
+    p95 = float(np.percentile(d, 95))
+    return p95 < tol, f"95% of its surface within {p95:.1f} mm of the scan (limit {tol:.1f})"
+
+
 # --- revolved -------------------------------------------------------------------------------
 
 def revolved_cad(mesh, min_round=0.92):
@@ -146,7 +165,10 @@ def lofted_cad(mesh, sections=14, points=40):
     # The loft's end caps sit 0.4 mm inside the mesh; extend nothing, report the ratio.
     ok, v = _check(solid, mesh, tol=0.10)
     info = {"sections": sections, "points_per_section": points, "volume_ratio": round(v / mesh.volume, 3) if v else None}
-    return (solid, info) if ok else (None, f"loft failed the volume check: {info}")
+    if not ok:
+        return None, f"loft failed the volume check: {info}"
+    near, why = _hugs(solid, mesh)
+    return (solid, {**info, "fit": why}) if near else (None, f"loft leaves the scan: {why}")
 
 
 # --- mesh in STEP ---------------------------------------------------------------------------
