@@ -233,6 +233,22 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 - **Results page:** `tools/results_renders.py` then `tools/results_page.py <out.html>`.
   Published privately at https://claude.ai/artifact/MxX5ZCnRBivYJQznJ3uzmS.
 
+## Deployed (4 Nov): https://nataliechan1963--bevell-3d-web.us-east.modal.run
+
+- `modal_app/web.py` (Modal app `bevell-3d`): the same FastAPI server, one container (4 CPU,
+  8 GiB), Blender 5.0.1 for the NURBS step, SAM 3D called on `bevell-sam3d` as locally.
+- Scans live in the Volume `bevell-3d-scans`, committed every 15 s. The seven examples were
+  put there with `modal volume put --force bevell-3d-scans out/scans/example-<name> /example-<name>`
+  after `python -m tools.seed_examples`; redeploy afterwards so the container sees them.
+- Secrets: `bevell-3d-meta` (the Meta key, from `.env.meta`) and `bevell-3d-access`
+  (`BEVELL3D_PASSCODE`). **The passcode is not written in this repo**; Natalie has it. A
+  scan or an agent run needs it (header `x-passcode`, a field on the photo check screen), and
+  there are 50 runs a day (UTC, `/scans/_usage.json`), then 429.
+- Checked through the deployed app with `tools.webapp_e2e --passcode`: the bottle in 129 s,
+  Mario in 221 s with SAM 3D and a NURBS STEP, 12 of 12 files open each time.
+- The examples' freeform models are NURBS (Mario, the mug, the clock); the mouse's
+  QuadriFlow left a hole at every density tried, so it keeps its triangle STEP.
+
 ## Web app (3 Nov)
 
 `webapp/`: a FastAPI server plus one page, styled like Bevell and built mobile first.
