@@ -262,16 +262,23 @@ def _img_url(arr_or_path, max_side=900):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def ask(messages, key=None, timeout=300, mode="tree"):
+def ask(messages, key=None, timeout=600, mode="tree"):
+    """Muse Spark reasons before it answers. Given the richer brief it spent all 12,000 tokens
+    reasoning on the mouse and returned no content, so the limit is 32,000, then 64,000."""
     key = key or os.environ["MODEL_API_KEY"]
     fmt = {"name": "feature_tree", "strict": False, "schema": TREE_SCHEMA} if mode == "tree" else \
           {"name": "cad_program", "strict": True, "schema": SCHEMA}
-    body = {"model": MODEL, "max_tokens": 12000, "messages": messages,
-            "response_format": {"type": "json_schema", "json_schema": fmt}}
-    r = requests.post(BASE + "/chat/completions", headers={"Authorization": "Bearer " + key}, json=body, timeout=timeout)
-    r.raise_for_status()
-    msg = r.json()["choices"][0]["message"]
-    return json.loads(msg["content"]), msg
+    for limit in (32000, 64000):
+        body = {"model": MODEL, "max_tokens": limit, "messages": messages,
+                "response_format": {"type": "json_schema", "json_schema": fmt}}
+        r = requests.post(BASE + "/chat/completions", headers={"Authorization": "Bearer " + key}, json=body, timeout=timeout)
+        r.raise_for_status()
+        choice = r.json()["choices"][0]; msg = choice["message"]
+        if msg.get("content"):
+            return json.loads(msg["content"]), msg
+        if choice.get("finish_reason") != "length":
+            raise RuntimeError(f"Muse Spark returned no content ({choice.get('finish_reason')}, refusal {msg.get('refusal')!r})")
+    raise RuntimeError(f"Muse Spark reasoned through all {limit} tokens without answering")
 
 
 def measured_sections(mesh, centre, n_levels=6, n_pts=8):
