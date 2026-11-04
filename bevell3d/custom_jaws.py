@@ -1,5 +1,5 @@
-"""A custom gripper end for a pair of scissors: the SO-101's own jaw parts with the scissors'
-holders built in.
+"""A custom gripper end for a pair of scissors: new SO-101 jaw parts, the stock fingers gone and the
+scissors' holders in their place.
 
     python -m bevell3d.custom_jaws <scan dir> [--video sim.mp4]
 
@@ -26,6 +26,8 @@ ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 H = np.array([20.2, 18.8, -23.4])                       # the gripper hinge, gripper frame (mm)
 JAW_Q = np.array([0.707107, 0.707107, 0.0, 0.0])        # moving jaw body orientation at q = 0
 FIXED_POS, MOVING_POS = np.array([0.0, -0.218214, 0.949706]), np.array([0.0, 0.0, 18.9])
+FIXED_CUT_Z = -42.0      # gripper frame, mm: below this the wrist-roll follower is only its fixed finger
+HUB_R = 26.0             # mm from the hinge: the moving jaw's hub round the servo horn
 
 
 def _quat_mat(q):
@@ -119,6 +121,14 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     moving = trimesh.load(os.path.join(ROOT, "assets", "moving_jaw_so101_v1.stl")); moving.apply_scale(1000)
     Tf, Tm0 = fixed_to_gripper(), moving_to_gripper(0.0)
     fixed_g = fixed.copy().apply_transform(Tf); moving_g = moving.copy().apply_transform(Tm0)
+    # The stock fingers go: the scissors are the fingers now. The wrist-roll follower keeps its
+    # servo housing and mount (above FIXED_CUT_Z; below it is only the fixed finger), the moving jaw
+    # its hub round the servo horn (within HUB_R of the hinge; beyond it is only the finger).
+    keep = trimesh.creation.box(bounds=[[-80, -80, FIXED_CUT_Z], [80, 80, 40]])
+    fixed_g = trimesh.boolean.intersection([fixed_g, keep], engine="manifold")
+    hub = trimesh.creation.cylinder(radius=HUB_R, height=120, sections=96)
+    hub.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], [0, 1, 0])); hub.apply_translation(H)
+    moving_g = trimesh.boolean.intersection([moving_g, hub], engine="manifold")
     # The scissors' plane: beside the gripper, `gap` mm clear of everything on that side.
     edge = min(fixed_g.bounds[0][1], moving_g.bounds[0][1]) if side < 0 else max(fixed_g.bounds[1][1], moving_g.bounds[1][1])
     y_mid = edge + side * (gap + 1.8 + t / 2)

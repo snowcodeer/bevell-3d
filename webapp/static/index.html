@@ -433,6 +433,10 @@ function onTilt(e) {
 // shot's height on its ring and its direction round the sheet, through a pinhole camera aimed at
 // the middle, then scaled to fill the frame. Each of the 16 shots gets its own outline.
 const RING_ELEV = { "45° UP": 45, "LOW, NEAR THE TABLE": 12, "FROM ABOVE": 78 };
+// The printed squares' centres (mm from the sheet's middle; assets/capture_sheet_layout.json), 22 mm each.
+const SQUARES = [[-128.5, 85], [-91.8, 85], [-55.1, 85], [-18.4, 85], [18.4, 85], [55.1, 85], [91.8, 85], [128.5, 85],
+  [-128.5, -85], [-91.8, -85], [-55.1, -85], [-18.4, -85], [18.4, -85], [55.1, -85], [91.8, -85], [128.5, -85],
+  [-128.5, 51], [-128.5, 0], [-128.5, -51], [128.5, 51], [128.5, 0], [128.5, -51]];
 function sheetView(shot, W, H) {
   const el = (RING_ELEV[shot.ring] * Math.PI) / 180, az = (shot.a * Math.PI) / 180, R = 420;
   const C = [R * Math.cos(el) * Math.cos(az), R * Math.cos(el) * Math.sin(az), R * Math.sin(el)];
@@ -443,12 +447,13 @@ function sheetView(shot, W, H) {
   const proj = (P) => { const d = sub(P, C), z = dot(d, f); return [dot(d, r) / z, -dot(d, u) / z]; };
   const corners = [[-148.5, 105, 0], [148.5, 105, 0], [148.5, -105, 0], [-148.5, -105, 0]].map(proj);
   const obj = proj([0, 0, 18]);
+  const squares = SQUARES.map(([x, y]) => [[x - 11, y + 11, 0], [x + 11, y + 11, 0], [x + 11, y - 11, 0], [x - 11, y - 11, 0]].map(proj));
   // Fit: the sheet fills the frame's width (or 60% of its height), centred a little low.
   const xs = corners.map((p) => p[0]), ys = corners.map((p) => p[1]);
   const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
   const k = Math.min((W * 0.9) / bw, (H * 0.6) / bh), mx = (Math.max(...xs) + Math.min(...xs)) / 2, my = (Math.max(...ys) + Math.min(...ys)) / 2;
   const place = (p) => [W / 2 + (p[0] - mx) * k, H * 0.55 + (p[1] - my) * k];
-  return { quad: corners.map(place), obj: place(obj), scale: k };
+  return { quad: corners.map(place), obj: place(obj), scale: k, squares: squares.map((sq) => sq.map(place)) };
 }
 function drawGuide() {
   const n = files.length, shot = SHOTS[Math.min(n, SHOTS.length - 1)], v = $("camview"), W = v.clientWidth, H = v.clientHeight;
@@ -464,11 +469,12 @@ function drawGuide() {
   const ov = $("cv-overlay"); ov.setAttribute("viewBox", `0 0 ${W} ${H}`);
   ov.innerHTML = `<path d="M0 0H${W}V${H}H0Z ${quad}" fill="rgb(0 0 0 / .42)" fill-rule="evenodd"/>`
     + `<path class="g" d="${quad}" fill="none" stroke-width="1.6" stroke-dasharray="7 7" opacity=".85"/>${br}`
+    + view.squares.map((sq) => `<path class="g" d="M${sq.map(f).join(" L")} Z" fill="rgb(255 255 255 / .12)" stroke-width="1.4" opacity=".9"/>`).join("")
     + `<rect class="g" x="${(c[0] - ow / 2).toFixed(1)}" y="${(c[1] - oh / 2).toFixed(1)}" width="${ow.toFixed(1)}" height="${oh.toFixed(1)}" rx="6" fill="none" stroke-width="2" stroke-dasharray="4 4"/>`;
   $("cv-ring").textContent = shot.ring;
   $("cv-count").textContent = `Photo ${Math.min(n + 1, 16)} of 16`;
   const first = !n || SHOTS[n - 1].ring !== shot.ring;
-  $("cv-text").textContent = first ? GUIDE_TEXT[shot.ring] : `${shot.text} Keep the sheet in the outline.`;
+  $("cv-text").textContent = first ? `${GUIDE_TEXT[shot.ring]} Line the squares up with the squares.` : `${shot.text} Line the squares up with the squares.`;
   $("cv-dial").innerHTML = dialSVG(n, false);
   $("cv-done").disabled = n < 8;
   const last = files[n - 1];
