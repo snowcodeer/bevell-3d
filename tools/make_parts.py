@@ -46,12 +46,28 @@ def wedge_stand():
     return cq.Workplane("XZ").polyline([(0, 0), (70, 0), (70, 10), (20, 60), (0, 60)]).close().extrude(-60)
 
 
+def servo():
+    """A hobby servo, the robot demo's part: case, mounting ears with four holes, output hub.
+
+    Sized like an MG996R: a 40.7 x 19.7 mm case 37 mm tall, ears 54.5 mm across from 26.5 to
+    29 mm up, holes 4.4 mm on 49.5 x 10 mm, a 13 mm hub to 42 mm off-centre over one end.
+    """
+    case = cq.Workplane("XY").rect(40.7, 19.7).extrude(37)
+    ears = cq.Workplane("XY").workplane(offset=26.5).rect(54.5, 19.7).extrude(2.5) \
+        .faces(">Z").workplane().pushPoints([(x, y) for x in (-24.75, 24.75) for y in (-5, 5)]).hole(4.4)
+    hub = cq.Workplane("XY").workplane(offset=37).center(40.7 / 2 - 10, 0).circle(6.5).extrude(5)
+    return case.union(ears).union(hub)
+
+
 PARTS = {"bracket": (bracket, "0.80,0.25,0.15"), "l_bracket": (l_bracket, "0.15,0.35,0.75"),
-         "gear": (gear, "0.85,0.55,0.10"), "wedge_stand": (wedge_stand, "0.20,0.55,0.30")}
+         "gear": (gear, "0.85,0.55,0.10"), "wedge_stand": (wedge_stand, "0.20,0.55,0.30"),
+         "servo": (servo, "0.07,0.07,0.08")}
 
 
-def main():
+def main(names=None):
     for name, (make, colour) in PARTS.items():
+        if names and name not in names:
+            continue
         d = os.path.join(OUT, name, "meshes"); os.makedirs(d, exist_ok=True)
         solid = make().val()
         bb = solid.BoundingBox()
@@ -65,4 +81,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1:])

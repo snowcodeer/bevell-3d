@@ -286,10 +286,14 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   only when it differs from the solid by under 10% of the volume. It writes `model_tree.json`
   and `model_fusion.zip` (level heights and hole diameters as parameters), and the result
   screen says the CAD is already editable.
-  - Designed test parts (`tools/make_parts.py`): bracket, L-bracket, gear, sloped stand. On
-    their exact meshes the bracket is 2 levels and 3 holes, the gear 2 levels and a bore, both
-    within 0.2% by volume; the stand is refused.
-  - From the bracket's scan: 2 levels (9.3 and 20.7 mm, true 8 and 22) and 3 holes, 0.93 mm
+  - Level boundaries are found by halving the gap between the last slice of one level and
+    the first of the next (`_level_boundary`, to 0.05 mm). The slices' midpoint alone put a
+    servo's ears at 26.0 mm, true 26.5.
+  - Designed test parts (`tools/make_parts.py`): bracket, L-bracket, gear, sloped stand, and a
+    hobby servo (the robot demo's part). On their exact meshes every level height is true
+    (servo 26.5, 2.5, 8 and 5 mm with its four ear holes, 0.1% by volume); the stand is
+    refused.
+  - From the bracket's scan: 2 levels (9.2 and 20.7 mm, true 8 and 22) and 3 holes, 0.93 mm
     from the true surface, 63.6 cm3 (true 65.2). Tuning the levels against the photos was tried
     (1.16 mm, but 11 minutes and still four levels) and left out.
   - On hulls the route is often refused: a visual hull cannot carve beside a step, so slices
