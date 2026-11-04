@@ -97,7 +97,8 @@ one (`tools/fusion_e2e.py`, through the BevellBridge add-in). Both kernels pick 
 chamfer's edges by where they lie and cap it under the smallest round its edges run along.
 The seventeenth, Muse Spark's richer mouse, is a six-section loft 0.65 mm apart on 128 mm
 (volume +0.6%): Fusion's and OpenCascade's smooth lofts interpolate differently between
-sections, and none of OpenCascade's loft settings matches Fusion on both size and volume.
+sections. Every OpenCascade loft setting was tried across all 17 trees in Fusion: the one
+used passes 16, the others 15 and 14.
 
 **Smooth NURBS:** Mario's 1,464 patches lie 0.06 mm from the scan and 0.93 mm from the true
 figure (the scan itself is 0.92), and open in Fusion as one solid.

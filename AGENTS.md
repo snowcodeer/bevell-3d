@@ -434,7 +434,10 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
     The richer mouse's loft settings were measured against Fusion (x -64.01 to 63.65, y
     ±35.48): isoparametric (kept) -63.68 to 64.68, ±35.16, volume -0.6%; chord length -63.81
     to 63.88, ±35.44, but volume -1.9% here and +3% on the five-ellipse mouse; centripetal in
-    between. Degree, continuity and smoothing change nothing or fail.
+    between. Degree, continuity and smoothing change nothing or fail. Across all 17 trees in
+    Fusion: isoparametric 16 pass, centripetal 15, chord length 14 (it fixes the richer mouse
+    and breaks the spline loft, the five-ellipse mouse and the mug). No single setting matches
+    Fusion's loft everywhere; isoparametric stays.
   - **4 Nov, morning: 15 of 16 pass**, the four new trees (Muse Spark's bracket, gear and L-bracket,
     the bracket's prismatic tree) within 0.01 mm. The richer mouse is 0.65 mm apart on a 128 mm
     six-section spline loft, volume +0.5%. Not the sketches: feeding Fusion CadQuery's own
