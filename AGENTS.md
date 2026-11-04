@@ -418,7 +418,24 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   by hand, a loft with a cut and chamfer, a block with an ellipse boss, a polygon cut and a
   fillet, and the agent's bottle and mouse) in Fusion and in CadQuery, and fails on a step
   error or more than 3% volume or 0.5 mm size apart. Results in `out/fusion_e2e.json`.
-  - **4 Nov: 15 of 16 pass**, the four new trees (Muse Spark's bracket, gear and L-bracket,
+  - **4 Nov, 13:00: 16 of 17 pass**, the servo's tree included, with no failed step. It had
+    failed at its last step in Fusion: a 1.3 mm chamfer round a base whose corners its own
+    0.71 mm fillet had rounded, which Fusion refuses. CadQuery never saw the problem because
+    its `|Z` selector skips B-spline edges, and the case was a loft, whose straight corners
+    OpenCascade makes B-splines (Fusion makes lines), so it never rounded them. Now both
+    kernels pick edges by where they lie (`select_edges`: at the body's top or bottom within
+    0.01 mm, or under a micron across for vertical), measure a round through three of its
+    points (`edge_radius`, whatever type the kernel gives the edge), and cap a fillet or
+    chamfer at 0.9 of the smallest round its edges run along (`cap_round`, warned). Trees
+    written before carry a Fusion script without these: `python -m bevell3d.agent_cad
+    <dir> --rebuild` remakes agent_model.step/.stl and agent_fusion.zip from agent_tree.json
+    with no model calls (done for every saved tree on 4 Nov; the clock, the first mouse and
+    the mug moved 0.5 to 1% in volume as their fillets now land where Fusion's do).
+    The richer mouse's loft settings were measured against Fusion (x -64.01 to 63.65, y
+    ±35.48): isoparametric (kept) -63.68 to 64.68, ±35.16, volume -0.6%; chord length -63.81
+    to 63.88, ±35.44, but volume -1.9% here and +3% on the five-ellipse mouse; centripetal in
+    between. Degree, continuity and smoothing change nothing or fail.
+  - **4 Nov, morning: 15 of 16 pass**, the four new trees (Muse Spark's bracket, gear and L-bracket,
     the bracket's prismatic tree) within 0.01 mm. The richer mouse is 0.65 mm apart on a 128 mm
     six-section spline loft, volume +0.5%. Not the sketches: feeding Fusion CadQuery's own
     spline sampled densely changed nothing (0.70 mm). The two kernels' smooth lofts interpolate

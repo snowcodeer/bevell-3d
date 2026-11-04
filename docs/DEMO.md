@@ -73,7 +73,7 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
 
 - Camera positions: 0.2 to 0.3 mm.
 - Sizes: within 2 mm on 12 of 15 objects; editable CAD within 1 to 2 mm of the true surface.
-- Feature trees build the same body in Fusion 360 and CadQuery: 15 of 16 test trees, within 0.6%
+- Feature trees build the same body in Fusion 360 and CadQuery: 16 of 17 test trees, within 0.6%
   in volume (the sixteenth, a spline loft, is 0.65 mm apart on 128 mm).
 - Smooth NURBS: 0.06 mm from the scan.
 - Photo mistakes: 13 of 13 user tests pass. Blurred, dark, tiny, huge, rotated, HEIC, PNG and

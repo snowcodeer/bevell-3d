@@ -76,7 +76,7 @@ whole pipeline with real model calls, then scored against the true meshes
 | Letter holder | NURBS | 2.4 | 4.8 | 0.41 | |
 | Fish toothbrush holder | NURBS | 1.3 | 4.4 | 0.74 | |
 | White mouse | NURBS | 6.4 | 1.5 | 1.6 | 2.2 |
-| Hobby servo | NURBS | 1.6 | 0.9 | 0.29 | |
+| Hobby servo | NURBS | 1.6 | 0.9 | 0.29 | 0.6 |
 
 - Camera positions within 0.2 to 0.3 mm (median). Size within 2 mm on 12 of 15 objects.
 - Runs vary: the bracket and gear, run again from the same photos, moved 0.8 and 0.4 mm in
@@ -90,12 +90,14 @@ whole pipeline with real model calls, then scored against the true meshes
 - Holders are valid, watertight solids with every edge treatment; most do not touch the true
   object at all.
 
-**Feature trees in Fusion 360:** 15 of 16 trees, hand-written, Muse Spark's and the prismatic
-route's, build the same body in Fusion and in CadQuery, within 0.6% in volume and 0.45 mm in
-size, and both refuse the same impossible one (`tools/fusion_e2e.py`, through the BevellBridge
-add-in). The sixteenth, Muse Spark's richer mouse, is a spline loft 0.65 mm apart on 128 mm
-(volume +0.5%): Fusion's and OpenCascade's smooth lofts interpolate differently between
-sections.
+**Feature trees in Fusion 360:** 16 of 17 trees, hand-written, Muse Spark's (the servo's
+included) and the prismatic route's, build the same body in Fusion and in CadQuery, within
+0.6% in volume and 0.45 mm in size, with no failed step, and both refuse the same impossible
+one (`tools/fusion_e2e.py`, through the BevellBridge add-in). Both kernels pick a fillet's or
+chamfer's edges by where they lie and cap it under the smallest round its edges run along.
+The seventeenth, Muse Spark's richer mouse, is a six-section loft 0.65 mm apart on 128 mm
+(volume +0.6%): Fusion's and OpenCascade's smooth lofts interpolate differently between
+sections, and none of OpenCascade's loft settings matches Fusion on both size and volume.
 
 **Smooth NURBS:** Mario's 1,464 patches lie 0.06 mm from the scan and 0.93 mm from the true
 figure (the scan itself is 0.92), and open in Fusion as one solid.
