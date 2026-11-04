@@ -57,18 +57,17 @@ def test_the_so101_works_the_scissors_in_simulation(tmp_path):
     assert 5 < rep["rail_mm"] < 60, rep["rail_mm"]
 
 
-def test_custom_jaws_hold_the_scissors_on_the_hinge_and_open_them_degree_for_degree(tmp_path):
-    """The SO-101's own jaw parts with the loops' clips built in, the scissors' pivot on the gripper
-    hinge: no part touches another or a blade over the stroke, both parts are watertight, and in
-    MuJoCo the blades open as far as the gripper does."""
+def test_new_jaws_go_through_the_scissors_loops_and_open_the_blades(tmp_path):
+    """New SO-101 jaws whose fingertips are plugs through the scissors' loops: both parts
+    watertight, and in MuJoCo the gripper opens the blades enough for paper while the moving
+    plug's slide along its loop stays inside the hole."""
     import os
     from tools.make_parts import scissors
-    from bevell3d.custom_jaws import write, simulate
+    from bevell3d.scissor_jaws import write
     if not os.path.exists("third_party/so101/assets/moving_jaw_so101_v1.stl"):
         pytest.skip("SO-101 files not present")
     _mesh(scissors).export(tmp_path / "model.stl")
-    rep = write(str(tmp_path), log=lambda *a: None)
-    assert all(v < 1.0 for v in rep["collisions_mm3"].values()), rep["collisions_mm3"]
-    assert all(p["watertight"] for p in rep["parts"].values()), rep["parts"]
-    sim = simulate(str(tmp_path))
-    assert abs(sim["blades_max_deg"] - sim["gripper_max_deg"]) < 1.0, sim
+    rep = write(str(tmp_path))
+    assert all(rep["parts_watertight"]), rep
+    sim = rep["sim"]
+    assert sim["blades_max_deg"] >= 15 and sim["stays_in_hole"] and sim["joint_gap_max_mm"] < 0.5, sim

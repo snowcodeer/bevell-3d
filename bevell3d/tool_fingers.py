@@ -71,8 +71,11 @@ def top_outline(views, masks, z, n=2):
         R, _ = cv2.Rodrigues(v["rv"]); C = (-R.T @ np.asarray(v["tv"]).reshape(3)).ravel()
         ranked.append((-(R.T @ np.array([0, 0, 1.0]))[2], v, m, R, C))
     ranked.sort(key=lambda r: -r[0])
+    # Only views that look nearly straight down (within about 25 degrees): one is enough, two from
+    # opposite sides cancel a little perspective; a 45-degree view would eat into the outline.
+    overhead = [r for r in ranked if r[0] > 0.9] or ranked[:1]
     out = None
-    for _, v, m, R, C in ranked[:n]:
+    for _, v, m, R, C in overhead[:n]:
         Kinv = np.linalg.inv(v["K"])
         def to_xy(c, R=R, C=C, Kinv=Kinv):
             d = (R.T @ (Kinv @ np.c_[c.astype(float), np.ones(len(c))].T)).T

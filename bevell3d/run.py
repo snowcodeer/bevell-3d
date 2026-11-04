@@ -149,11 +149,11 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
             # the gripper's hinge, tested in MuJoCo.
             if summary["tool_fingers"]["loops"]:
                 try:
-                    from .custom_jaws import write as write_jaws, simulate as simulate_jaws
-                    cj = write_jaws(out_dir, log=log)
-                    sim = simulate_jaws(out_dir)
-                    summary["custom_jaws"] = {"collisions_mm3": cj["collisions_mm3"], "arm_mm": cj["arm_mm"], "side": cj["side"],
-                                              "parts": cj["parts"], "clips": cj["clips"], "sim": sim}
+                    # New jaws whose fingertips go through the loops (scissor_jaws.py), simulated.
+                    from .scissor_jaws import write as write_jaws
+                    cj = write_jaws(out_dir)
+                    summary["custom_jaws"] = {"fixed_jaw": cj["fixed_jaw"], "moving_jaw": cj["moving_jaw"],
+                                              "watertight": cj["parts_watertight"], "sim": cj["sim"]}
                 except Exception as e:
                     summary["custom_jaws_error"] = f"{type(e).__name__}: {e}"
             # Scissors: the SO-101 working them in MuJoCo sets the gripper's range and the rail the

@@ -158,6 +158,10 @@ body.camopen { overflow: hidden; }
 .cv-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 .cv-flash.on { animation: cvflash .28s ease-out; }
 @keyframes cvflash { from { opacity: .75; } to { opacity: 0; } }
+.cv-move { position: absolute; left: 0; right: 0; top: 19%; display: grid; justify-items: center; gap: 2px; pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / .8)); }
+.cv-move b { font: 700 18px var(--display); text-shadow: 0 1px 4px rgb(0 0 0 / .9); }
+.cv-move:empty { display: none; }
 .cv-msg { position: absolute; left: 18px; right: 18px; top: 45%; text-align: center; font: 600 16px var(--body); }
 </style>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
@@ -176,7 +180,7 @@ body.camopen { overflow: hidden; }
   <main>
     <section class="screen" data-screen="start">
       <h1>Photos in.<br>CAD out.</h1>
-      <p class="lede">16 photos on a printed sheet. Back comes a true-size model and a holder to print.</p>
+      <p class="lede">15 photos on a printed sheet. Back comes a true-size model and a holder to print.</p>
       <div class="card gets">
         <div class="get"><span class="ic">mm</span><b>Measured, not guessed</b></div>
         <div class="get"><span class="ic">3D</span><b>STEP and STL</b></div>
@@ -301,6 +305,7 @@ body.camopen { overflow: hidden; }
       <svg id="cv-dial" viewBox="-80 -84 160 164" role="img" aria-label="Where to stand, seen from above"></svg>
     </div>
     <div class="cv-tilt" id="cv-tilt" hidden><i id="cv-tilt-target"></i><b id="cv-tilt-dot"><span id="cv-tilt-text"></span></b></div>
+    <div class="cv-move" id="cv-move"></div>
     <p class="cv-text" id="cv-text"></p>
     <div class="cv-bottom">
       <img id="cv-last" alt="">
@@ -382,7 +387,6 @@ const SHOTS = [
   ...[0, 60, 120, 180, 240, 300].map((a, i) => ({ ring: "45° UP", r: 42, a, text: i ? "Step round a little." : "Phone at 45°, whole sheet in view." })),
   ...[15, 60, 105, 150, 195, 240, 285, 330].map((a, i) => ({ ring: "LOW, NEAR THE TABLE", r: 66, a, text: i ? "Step round a little." : "Now go low, phone almost on the table." })),
   { ring: "FROM ABOVE", r: 12, a: 90, text: "Straight down." },
-  { ring: "FROM ABOVE", r: 12, a: 270, text: "Straight down, turned round." },
 ];
 const urls = new Map(), thumb = (f) => { if (!urls.has(f)) urls.set(f, URL.createObjectURL(f)); return urls.get(f); };
 // The top view of the sheet with a dot for every photo: done, next and still to take.
@@ -395,8 +399,8 @@ function dialSVG(n, caption) {
 }
 function shootScreen() {
   const n = files.length, done = n >= SHOTS.length, shot = SHOTS[Math.min(n, SHOTS.length - 1)];
-  $("g-ring").textContent = done ? "ALL 16 TAKEN" : shot.ring;
-  $("g-count").textContent = done ? `${n} photos` : `Photo ${n + 1} of 16`;
+  $("g-ring").textContent = done ? `ALL ${SHOTS.length} TAKEN` : shot.ring;
+  $("g-count").textContent = done ? `${n} photos` : `Photo ${n + 1} of ${SHOTS.length}`;
   $("g-text").textContent = done ? "All done." : shot.text;
   $("dial").innerHTML = dialSVG(n, true);
   $("strip").innerHTML = files.map((f) => /heic|heif/i.test(f.name) ? `<div>HEIC</div>` : `<img alt="" src="${thumb(f)}">`).join("");
@@ -404,7 +408,7 @@ function shootScreen() {
   const take = button(done ? "Another photo" : `Take photo ${n + 1}`, "primary", () => $("cam").click());
   const pick = button("From your photos", "ghost", () => $("file").click());
   const review = button(`Done · ${n} photos`, "primary", () => go("review"));
-  const guided = button(n ? `Guided camera · photo ${Math.min(n + 1, 16)}` : "Open the guided camera", "primary", openCamera);
+  const guided = button(n ? `Guided camera · photo ${Math.min(n + 1, SHOTS.length)}` : "Open the guided camera", "primary", openCamera);
   if (COARSE && CAN_GUIDE) actions(...(n >= 8 ? [n < SHOTS.length ? guided : take, review] : [guided, pick]));
   else if (COARSE) actions(...(n >= 8 ? [take, review] : [take, pick]));
   else actions(...(n >= 8 ? [review, pick] : [button("Choose photos", "primary", () => $("file").click())]));
@@ -431,7 +435,7 @@ function onTilt(e) {
 }
 // The A4 sheet (mm, landscape, as the map draws it) seen from this shot's own position: the
 // shot's height on its ring and its direction round the sheet, through a pinhole camera aimed at
-// the middle, then scaled to fill the frame. Each of the 16 shots gets its own outline.
+// the middle, then scaled to fill the frame. Each shot gets its own outline.
 const RING_ELEV = { "45° UP": 45, "LOW, NEAR THE TABLE": 12, "FROM ABOVE": 78 };
 // The printed squares' centres (mm from the sheet's middle; assets/capture_sheet_layout.json), 22 mm each.
 const SQUARES = [[-128.5, 85], [-91.8, 85], [-55.1, 85], [-18.4, 85], [18.4, 85], [55.1, 85], [91.8, 85], [128.5, 85],
@@ -472,14 +476,38 @@ function drawGuide() {
     + view.squares.map((sq) => `<path class="g" d="M${sq.map(f).join(" L")} Z" fill="rgb(255 255 255 / .12)" stroke-width="1.4" opacity=".9"/>`).join("")
     + `<rect class="g" x="${(c[0] - ow / 2).toFixed(1)}" y="${(c[1] - oh / 2).toFixed(1)}" width="${ow.toFixed(1)}" height="${oh.toFixed(1)}" rx="6" fill="none" stroke-width="2" stroke-dasharray="4 4"/>`;
   $("cv-ring").textContent = shot.ring;
-  $("cv-count").textContent = `Photo ${Math.min(n + 1, 16)} of 16`;
+  $("cv-count").textContent = `Photo ${Math.min(n + 1, SHOTS.length)} of ${SHOTS.length}`;
   const first = !n || SHOTS[n - 1].ring !== shot.ring;
   $("cv-text").textContent = first ? `${GUIDE_TEXT[shot.ring]} Line the squares up with the squares.` : `${shot.text} Line the squares up with the squares.`;
-  $("cv-dial").innerHTML = dialSVG(n, false);
+  $("cv-dial").innerHTML = dialSVG(n, false) + pathArrow(n);
+  $("cv-move").innerHTML = moveHint(n);
   $("cv-done").disabled = n < 8;
   const last = files[n - 1];
   if (last && !/heic|heif/i.test(last.name)) $("cv-last").src = thumb(last); else $("cv-last").removeAttribute("src");
   drawTilt();
+}
+// Which way to go for the next shot: on the map, an arc from the last dot to the next; on the
+// camera view, a big arrow. Going round the sheet anticlockwise (seen from above) while facing it
+// is stepping to your right.
+const dotXY = (s) => [Math.cos((s.a * Math.PI) / 180) * s.r, -Math.sin((s.a * Math.PI) / 180) * s.r];
+function pathArrow(n) {
+  if (!n || n >= SHOTS.length) return "";
+  const a = SHOTS[n - 1], b = SHOTS[n];
+  if (a.ring !== b.ring) return "";
+  const [x0, y0] = dotXY(a), [x1, y1] = dotXY(b), r = b.r;
+  return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 0 0 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="#8095f9" stroke-width="3.5" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+    <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8095f9"/></marker></defs>`;
+}
+function moveHint(n) {
+  if (!n || n >= SHOTS.length) return "";
+  const a = SHOTS[n - 1], b = SHOTS[n];
+  const arrow = (d) => `<svg viewBox="0 0 120 60" width="120" height="60" aria-hidden="true"><path d="${d}" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  if (a.ring !== b.ring) {
+    if (b.ring.startsWith("LOW")) return `${arrow("M60 8V50M40 32l20 20 20-20")}<b>Crouch low</b>`;
+    return `${arrow("M60 52V10M40 28l20-20 20 20")}<b>Stand over the sheet</b>`;
+  }
+  const step = ((b.a - a.a + 360) % 360);
+  return `${arrow("M10 44 Q60 4 108 40M92 22l16 18-22 6")}<b>Step right, about ${step}° round</b>`;
 }
 function drawTilt() {
   const shot = SHOTS[Math.min(files.length, SHOTS.length - 1)], want = TILT[shot.ring], on = tiltDown != null;
@@ -547,7 +575,7 @@ $("file").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
 
 function reviewScreen() {
   const n = files.length;
-  $("r-status").textContent = n >= 12 ? `${n} photos · good` : n >= 8 ? `${n} photos · 16 is better` : `${n} photos · add ${8 - n} more`;
+  $("r-status").textContent = n >= 12 ? `${n} photos · good` : n >= 8 ? `${n} photos · ${SHOTS.length} is better` : `${n} photos · add ${8 - n} more`;
   $("r-status").className = "status " + (n >= 12 ? "ok" : "warn");
   $("grid").innerHTML = files.map((f, i) => `<div class="ph">${/heic|heif/i.test(f.name) ? `<div class="heic">HEIC</div>` : `<img alt="" src="${thumb(f)}">`}<button aria-label="Remove photo ${i + 1}" data-i="${i}">×</button></div>`).join("");
   $("grid").querySelectorAll("button").forEach((b) => (b.onclick = () => { files.splice(+b.dataset.i, 1); reviewScreen(); }));
@@ -622,23 +650,23 @@ async function resultScreen(id) {
   const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
   fingersCard(st, s, f);
   viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"],
-    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["custom_jaws_scissors.stl"]);
+    f["scissor_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["scissor_jaws_scissors.stl"]);
   agentCard(id, st);
 }
 function fingersCard(st, s, f) {
   const card = $("fingers-card"), tf = s.tool_fingers, cj = s.custom_jaws;
   if (cj) {
     $("r-title").textContent = `Custom robot grippers for your ${s.plan.object}`;
-    const clear = Object.values(cj.collisions_mm3).every((v) => v < 1);
-    card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> The scissors' pivot on the gripper hinge</div>
-      <div class="facts"><div class="fact"><b>${cj.sim.gripper_max_deg.toFixed(0)}° → ${cj.sim.blades_max_deg.toFixed(0)}°</b><span>gripper to blades, tested in MuJoCo</span></div>
-      <div class="fact"><b>${clear ? "Clear" : "Check"}</b><span>${clear ? "no collisions over the stroke" : "parts touch over the stroke"}</span></div></div>
+    const sim = cj.sim;
+    card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> New jaws whose fingertips go through the loops</div>
+      <div class="facts"><div class="fact"><b>${sim.gripper_max_deg.toFixed(0)}° → ${sim.blades_max_deg.toFixed(0)}°</b><span>gripper to blades, tested in MuJoCo</span></div>
+      <div class="fact"><b>${sim.stays_in_hole ? "Fits" : "Check"}</b><span>moving plug slides ${Math.abs(sim.slide_mm[0]).toFixed(1)} of ${sim.slide_room_mm.toFixed(1)} mm</span></div></div>
       <ol class="steps"><li>Print the new moving jaw and wrist-roll follower (as you printed the originals).</li>
-      <li>Swap them in for the SO-101's own: same screws, same servo horn.</li>
-      <li>Snap each finger loop into its clip, scissors closed with the gripper closed.</li>
-      <li>Open the gripper and the blades open with it, degree for degree.</li></ol>
-      <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["custom_jaws.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["custom_jaws.3mf"]}" download>Both parts, 3MF</a>
-      <a class="chip" href="${f["custom_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["custom_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a>${f["custom_jaws_sim.xml"] ? `<a class="chip" href="${f["custom_jaws_sim.xml"]}" download>MuJoCo model</a>` : ""}</div>`;
+      <li>Unscrew the SO-101's own and fit these: same screws, same servo horn.</li>
+      <li>Close the gripper, close the scissors and press each loop over its plug until it snaps past the lip.</li>
+      <li>Open the gripper and the blades open with it.</li></ol>
+      <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["scissor_jaws.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["scissor_jaws.3mf"]}" download>Both parts, 3MF</a>
+      <a class="chip" href="${f["scissor_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["scissor_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a>${f["scissor_jaws_sim.xml"] ? `<a class="chip" href="${f["scissor_jaws_sim.xml"]}" download>MuJoCo model</a>` : ""}</div>`;
     card.hidden = false;
     return;
   }
