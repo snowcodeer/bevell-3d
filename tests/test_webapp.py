@@ -15,6 +15,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "DAILY_CAP", 0)
     monkeypatch.setattr(server, "BYOK_DAILY_CAP", 200)
     monkeypatch.setattr(server, "BYOK_SAM3D", True)
+    monkeypatch.setattr(server, "UNLIMITED_DAILY_CAP", 20)
+    monkeypatch.setattr(server, "_verdicts", {})
+    monkeypatch.setattr(server, "_ask_bevell", lambda key: pytest.fail("asked the real bevell.app"))
     started, agents = [], []
     monkeypatch.setattr(server, "_work", lambda scan_id, paths, key=None, sam3d=True: started.append((scan_id, paths, key, sam3d)))
     monkeypatch.setattr(server, "_agent", lambda scan_id, key=None: agents.append((scan_id, key)))
@@ -29,7 +32,8 @@ def photos(n, name="IMG_{:02d}.jpg"):
 
 
 def test_open_by_default_and_says_so(client):
-    assert client.get("/api/config").json() == {"passcode": False, "daily_cap": 0, "byok": True, "byok_daily_cap": 200}
+    assert client.get("/api/config").json() == {"passcode": False, "daily_cap": 0, "byok": True, "byok_daily_cap": 200,
+                                                "unlimited": True, "unlimited_daily_cap": 20}
 
 
 @pytest.mark.parametrize("n", [0, 1, 7, 41])
@@ -304,3 +308,80 @@ def test_the_key_reaches_a_spawned_run_as_an_argument_and_goes_no_further(tmp_pa
     printed = capfd.readouterr()
     assert "calling the API with" in printed.out and KEY not in printed.out + printed.err
     assert not any(KEY.encode() in p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
+
+
+# ---------- a Bevell Unlimited subscriber's Bevell API key ----------
+
+BVL = "bvl_test_abc123"
+
+
+def bevell(monkeypatch, status=200, sub="active", account="acct-1", error=None):
+    """bevell.app's GET /api/v1/account, answering as told; counts how often it is asked."""
+    asked = []
+
+    def ask(key):
+        asked.append(key)
+        if error:
+            raise error
+        body = {"object": "account", "id": account, "email": "someone@example.com", "subscription": {"status": sub}}
+        return types.SimpleNamespace(status_code=status, json=lambda: body)
+    monkeypatch.setattr(server, "_ask_bevell", ask)
+    return asked
+
+
+def test_an_unlimited_bevell_key_runs_on_our_meta_key_and_is_kept_nowhere(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    asked = bevell(monkeypatch, sub="trialing")
+    r = client.post("/api/scans", files=photos(8), headers=own(BVL))
+    assert r.status_code == 200 and asked == [BVL]
+    assert client.started[0][2:] == (None, True)          # our Meta key, SAM 3D on; the Bevell key not passed
+    sid, bodies = r.json()["id"], [r.text]
+    (tmp_path / sid / "result").mkdir()
+    (tmp_path / sid / "result" / "views.pkl").write_bytes(b"")
+    for r in (client.post(f"/api/scans/{sid}/agent", headers=own(BVL)), client.get(f"/api/scans/{sid}")):
+        assert r.status_code == 200
+        bodies.append(r.text)
+    assert client.agents == [(sid, None)] and len(asked) == 1        # the verdict was kept, not asked again
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    assert json.loads((tmp_path / "_usage.json").read_text()) == {f"unlimited acct-1 {today}": 2}
+    assert not any(BVL in b for b in bodies) and BVL not in json.dumps({k: str(v) for k, v in server._verdicts.items()})
+    assert not any(BVL.encode() in p.read_bytes() or b"someone@" in p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
+
+
+@pytest.mark.parametrize("status, sub, code, says", [
+    (200, "canceled", 402, "no Bevell Unlimited"), (200, None, 402, "no Bevell Unlimited"),
+    (402, None, 402, "no Bevell Unlimited"), (401, None, 401, "not recognised"), (500, None, 503, "Could not check")])
+def test_a_bevell_key_without_unlimited_is_refused_and_says_why(client, monkeypatch, status, sub, code, says):
+    bevell(monkeypatch, status=status, sub=sub)
+    r = client.post("/api/scans", files=photos(8), headers=own(BVL))
+    assert r.status_code == code and says in r.json()["detail"] and BVL not in r.text and not client.started
+
+
+def test_a_bevell_check_that_times_out_is_a_503_and_is_asked_again(client, monkeypatch):
+    import requests
+    asked = bevell(monkeypatch, error=requests.Timeout(f"read timed out for {BVL}"))
+    for _ in range(2):
+        r = client.post("/api/scans", files=photos(8), headers=own(BVL))
+        assert r.status_code == 503 and "Could not check your Bevell subscription" in r.json()["detail"] and BVL not in r.text
+    assert len(asked) == 2 and not client.started             # a failed check is not kept
+
+
+def test_bevell_verdicts_are_kept_ten_minutes_by_hash(client, monkeypatch):
+    asked = bevell(monkeypatch)
+    assert client.post("/api/scans", files=photos(8), headers=own(BVL)).status_code == 200
+    assert client.post("/api/scans", files=photos(8), headers=own(BVL)).status_code == 200
+    assert len(asked) == 1 and list(server._verdicts) == [server.hashlib.sha256(BVL.encode()).hexdigest()]
+    (h, (until, account)), = server._verdicts.items()
+    assert account == "acct-1" and 590 < until - time.time() <= 600
+    server._verdicts[h] = (time.time() - 1, account)                   # ten minutes on: asked again
+    assert client.post("/api/scans", files=photos(8), headers=own(BVL)).status_code == 200 and len(asked) == 2
+
+
+def test_each_unlimited_account_has_its_own_daily_cap(client, monkeypatch):
+    monkeypatch.setattr(server, "UNLIMITED_DAILY_CAP", 1)
+    bevell(monkeypatch, account="acct-1")
+    assert client.post("/api/scans", files=photos(8), headers=own(BVL)).status_code == 200
+    r = client.post("/api/scans", files=photos(8), headers=own(BVL))
+    assert r.status_code == 429 and "Bevell Unlimited" in r.json()["detail"]
+    bevell(monkeypatch, account="acct-2")
+    assert client.post("/api/scans", files=photos(8), headers=own("bvl_other_key_2")).status_code == 200

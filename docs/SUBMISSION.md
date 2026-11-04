@@ -22,7 +22,8 @@ mistakes people make with photos.
 **Public GitHub repository:** https://github.com/snowcodeer/bevell-3d
 
 **Live demo:** https://nataliechan1963--bevell-3d-web.us-east.modal.run (open to anyone with
-their own Meta Model API key; a passcode for judges is in the form's notes; the examples are open)
+their own Meta Model API key or a Bevell Unlimited subscription's Bevell API key; a passcode for
+judges is in the form's notes; the examples are open)
 
 **Describe your use of Meta products**
 

@@ -259,6 +259,9 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   status.json, prints and every file the run writes. Never validated against the API. Own-key
   runs have their own cap (`BEVELL3D_BYOK_DAILY_CAP`, default 200) and keep SAM 3D unless
   `BEVELL3D_BYOK_SAM3D=0`.
+- Or a Bevell API key (`bvl_`, same field) whose account has Bevell Unlimited: the server asks
+  `GET https://bevell.app/api/v1/account` (verdict kept 10 minutes by the key's sha256), then
+  runs on our Meta key. 20 runs per account a day (`BEVELL3D_UNLIMITED_DAILY_CAP`).
 - Checked through the deployed app with `tools.webapp_e2e --passcode`: the bottle in 129 s,
   Mario in 221 s with SAM 3D and a NURBS STEP, 12 of 12 files open each time.
 - The examples' freeform models are NURBS (Mario, the mug, the clock); the mouse's
@@ -380,7 +383,7 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 - **User tests** (`tools/user_tests.py`, real pipeline): minimum 8 photos, one side only,
   blurred, dark, 640 px, 48 MP, rotated by EXIF, PNG and HEIC all come out within 2.5 mm;
   sixteen copies of one photo and photos with no sheet are refused with what to do; a broken
-  photo is skipped. API tests (`tests/test_webapp.py`, 41) cover the passcode, own keys, the caps,
+  photo is skipped. API tests (`tests/test_webapp.py`, 50) cover the passcode, own keys, the caps,
   photo limits, file types, ids and path traversal.
 - **Each scan and agent run is its own spawned process** (`webapp/server.py`, `_in_child`),
   stopped after 20 and 30 minutes (`BEVELL3D_SCAN_TIMEOUT`, `BEVELL3D_AGENT_TIMEOUT`). Not a

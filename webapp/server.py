@@ -6,9 +6,10 @@
 Scans live under out/scans/<id>/: the uploads, every pipeline output, and status.json,
 which the page polls. One scan runs at a time per process; a second waits its turn.
 """
-import hmac, json, os, re, shutil, sys, threading, time, traceback, uuid
+import hashlib, hmac, json, os, re, shutil, sys, threading, time, traceback, uuid
 from urllib.parse import quote
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -73,7 +74,17 @@ BYOK_SAM3D = os.environ.get("BEVELL3D_BYOK_SAM3D", "1") != "0"
 # Visible ASCII only, so no whitespace, and at least 8 characters, so masking it cannot touch
 # ordinary text. Never checked against the API: a key it refuses fails the run's first call.
 KEY_FORM = re.compile(r"^[\x21-\x7e]{8,512}$")
-usage_lock = threading.Lock()
+# Or a Bevell Unlimited subscriber's Bevell API key (bvl_..., in the same field): bevell.app says
+# whether its account is subscribed, and the run goes on our Meta key, as with the passcode. The
+# Bevell key goes no further than that check. Each account has its own daily cap.
+BEVELL_PREFIX = "bvl_"
+BEVELL_ACCOUNT_URL = os.environ.get("BEVELL3D_ACCOUNT_URL", "https://bevell.app/api/v1/account")
+UNLIMITED_DAILY_CAP = int(os.environ.get("BEVELL3D_UNLIMITED_DAILY_CAP", "20") or 0)
+VERDICT_S, REFUSAL_S = 600, 60              # how long bevell.app's answer is kept, by sha256 of the key
+NOT_RECOGNISED = "That Bevell API key was not recognised. Make one at bevell.app/developers."
+NO_UNLIMITED = "That key's account has no Bevell Unlimited. Get it at bevell.app/pricing."
+_verdicts = {}
+usage_lock, verdict_lock = threading.Lock(), threading.Lock()
 
 
 def _own_key(request):
@@ -83,32 +94,74 @@ def _own_key(request):
     return key or None
 
 
+def _ask_bevell(key):
+    import requests
+    return requests.get(BEVELL_ACCOUNT_URL, headers={"Authorization": "Bearer " + key}, timeout=10)
+
+
+def _unlimited_account(key):
+    """The account id behind a Bevell API key whose account has Bevell Unlimited, or the
+    HTTPException that says why not. Only a hash of the key is kept, never the key."""
+    h = hashlib.sha256(key.encode()).hexdigest()
+    with verdict_lock:
+        hit = _verdicts.get(h)
+    if hit and hit[0] > time.time():
+        if isinstance(hit[1], HTTPException):
+            raise hit[1]
+        return hit[1]
+    try:
+        r = _ask_bevell(key)
+        body = r.json() if r.status_code == 200 else {}
+    except Exception as e:                      # the network, a timeout, a page that is not JSON
+        print("Bevell account check failed:", type(e).__name__, flush=True)
+        raise HTTPException(503, "Could not check your Bevell subscription. Try again.")
+    if r.status_code == 200 and (body.get("subscription") or {}).get("status") in ("active", "trialing") and body.get("id"):
+        verdict, keep = str(body["id"]), VERDICT_S
+    elif r.status_code in (401, 403):
+        verdict, keep = HTTPException(401, NOT_RECOGNISED), REFUSAL_S
+    elif r.status_code in (200, 402):
+        verdict, keep = HTTPException(402, NO_UNLIMITED), REFUSAL_S
+    else:
+        print("Bevell account check failed: HTTP", r.status_code, flush=True)
+        raise HTTPException(503, "Could not check your Bevell subscription. Try again.")
+    with verdict_lock:
+        _verdicts[h] = (time.time() + keep, verdict)
+    if isinstance(verdict, HTTPException):
+        raise verdict
+    return verdict
+
+
 def _check_access(request):
-    """Who pays for the run: the visitor's own key, returned, or ours behind the passcode (None)."""
+    """Who pays for the run, as (the Meta key for the run, the cap it counts against). The
+    visitor's own Meta key runs on itself; a Bevell Unlimited key or the passcode on ours (None)."""
     key = _own_key(request)
+    if key and key.startswith(BEVELL_PREFIX):
+        return None, f"unlimited {_unlimited_account(key)}"
     if key:
-        return key
+        return key, "own-key"
     given = request.headers.get("x-passcode", "").strip()
     if PASSCODE and not hmac.compare_digest(given.lower(), PASSCODE.lower()):
         raise HTTPException(401, "That passcode isn't right." if given else
-                            "Enter the passcode, or your own Meta Model API key.")
-    return None
+                            "Enter the passcode, your own Meta Model API key, or a Bevell API key.")
+    return None, ""
 
 
-def _count_run(own_key=False):
-    """Count one run against today's cap (UTC); refuse when it is used up. Runs on an own key
-    are counted apart, against their own cap."""
-    cap = BYOK_DAILY_CAP if own_key else DAILY_CAP
+def _count_run(bucket=""):
+    """Count one run against today's cap (UTC); refuse when it is used up. Own Meta keys share
+    a cap of their own, and each Bevell Unlimited account has its own."""
+    unlimited = bucket.startswith("unlimited")
+    cap = BYOK_DAILY_CAP if bucket == "own-key" else UNLIMITED_DAILY_CAP if unlimited else DAILY_CAP
     if not cap:
         return
     path = os.path.join(SCANS, "_usage.json")
     today = time.strftime("%Y-%m-%d", time.gmtime())
-    name = f"own-key {today}" if own_key else today
+    name = f"{bucket} {today}" if bucket else today
     with usage_lock:
         use = json.load(open(path)) if os.path.exists(path) else {}
         if use.get(name, 0) >= cap:
-            raise HTTPException(429, f"Today's {cap} runs on visitors' own keys are used up. Try again tomorrow, or see the examples."
-                                if own_key else f"Today's {cap} runs are used up. Try again tomorrow, or see the examples.")
+            raise HTTPException(429, f"Today's {cap} runs on your Bevell Unlimited account are used up. Try again tomorrow."
+                                if unlimited else f"Today's {cap} runs on visitors' own keys are used up. Try again tomorrow, or see the examples."
+                                if bucket else f"Today's {cap} runs are used up. Try again tomorrow, or see the examples.")
         use = {k: v for k, v in use.items() if k.endswith(today)}      # only today's counts are kept
         use[name] = use.get(name, 0) + 1
         os.makedirs(SCANS, exist_ok=True)
@@ -310,15 +363,16 @@ def _work(scan_id, paths, key=None, sam3d=True, target=None, timeout=None):
 
 @app.get("/api/config")
 def config():
-    return {"passcode": bool(PASSCODE), "daily_cap": DAILY_CAP, "byok": True, "byok_daily_cap": BYOK_DAILY_CAP}
+    return {"passcode": bool(PASSCODE), "daily_cap": DAILY_CAP, "byok": True, "byok_daily_cap": BYOK_DAILY_CAP,
+            "unlimited": True, "unlimited_daily_cap": UNLIMITED_DAILY_CAP}
 
 
 @app.post("/api/scans")
 async def create_scan(request: Request, photos: list[UploadFile] = File(...), mode: str = Form("scan")):
-    key = _check_access(request)
+    key, bucket = await run_in_threadpool(_check_access, request)      # may ask bevell.app
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")
-    _count_run(own_key=bool(key))
+    _count_run(bucket)
     scan_id = uuid.uuid4().hex[:12]
     up = os.path.join(SCANS, scan_id, "upload")
     os.makedirs(up)
@@ -376,11 +430,11 @@ def _agent(scan_id, key=None):
 def start_agent(scan_id: str, request: Request):
     """Muse Spark writes the object as an editable CAD program; the photos tune and check it. On
     an own key, the request brings it again: the scan's was never kept."""
-    key = _check_access(request)
+    key, bucket = _check_access(request)
     res = os.path.join(SCANS, scan_id, "result")
     if not ID.match(scan_id) or not os.path.exists(os.path.join(res, "views.pkl")):
         raise HTTPException(404, "That scan has no photos to check CAD against.")
-    _count_run(own_key=bool(key))
+    _count_run(bucket)
     _status(scan_id, agent={"state": "queued", "detail": "starting"})
     threading.Thread(target=_agent, args=(scan_id, key), daemon=True).start()
     return {"ok": True}

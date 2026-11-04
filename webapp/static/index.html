@@ -239,9 +239,10 @@ body.camopen { overflow: hidden; }
       <div class="grid" id="grid"></div>
       <p class="muted small">Remove blurry ones.</p>
       <label class="pass" id="pass-row" hidden>Passcode<input id="pass" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-      <label class="pass" id="key-row" hidden><span id="key-label">Or use your own Meta Model API key</span>
+      <label class="pass" id="key-row" hidden><span id="key-label">Your Meta Model API key, or a Bevell API key (Bevell Unlimited)</span>
         <input id="own-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <span class="small">Used only for this scan and never stored on our server. This tab forgets it when you close it.</span></label>
+        <span class="small">Used only for this scan and never stored on our server. This tab forgets it when you close it.</span>
+        <span class="small"><a href="https://bevell.app/pricing" target="_blank" rel="noopener">Get Bevell Unlimited</a>, then make a key at <a href="https://bevell.app/developers" target="_blank" rel="noopener">bevell.app/developers</a>.</span></label>
       <p class="err" id="up-err" hidden></p>
     </section>
 
@@ -585,12 +586,13 @@ function reviewScreen() {
   actions(button("Make my CAD", "primary", upload, n < 8 || n > 40), button("Add more", "ghost", () => go("shoot")));
 }
 // Deployed, a run needs the passcode the server asks for; it is remembered on this device.
-// Or the visitor's own Meta Model API key: kept in this tab only (sessionStorage), sent with each run.
+// Or the visitor's own Meta Model API key, or a Bevell Unlimited subscriber's Bevell API key (bvl_...,
+// checked by the server): kept in this tab only (sessionStorage), sent with each run.
 let cfg = { passcode: false, byok: false };
 fetch("/api/config").then((r) => r.json()).then((c) => {
   cfg = c; $("pass-row").hidden = !c.passcode; $("key-row").hidden = !c.byok;
-  $("key-label").textContent = c.passcode ? "Or use your own Meta Model API key" : "Your own Meta Model API key (optional)";
 }).catch(() => {});
+const KEY_LABEL = "Your Meta Model API key, or a Bevell API key (Bevell Unlimited)";
 const remembered = () => { try { return localStorage.getItem("bevell3d-pass") || ""; } catch { return ""; } };
 $("pass").value = remembered();
 const KEY_STORE = "bevell3d-own-key", KEY_FORM = /^[\x21-\x7e]{8,512}$/;   // as the server checks it
@@ -615,7 +617,7 @@ function accessFields() {
     l.append(i); box.append(l);
   };
   if (cfg.passcode) copy($("pass"), "Passcode");
-  if (cfg.byok) copy($("own-key"), cfg.passcode ? "Or your own Meta Model API key" : "Your own Meta Model API key");
+  if (cfg.byok) copy($("own-key"), KEY_LABEL);
   return box;
 }
 async function upload() {
@@ -629,7 +631,7 @@ async function upload() {
     if (r.ok) { try { localStorage.setItem("bevell3d-pass", $("pass").value.trim()); } catch {} go("making", j.id); return; }
     msg = j.detail || "The upload failed.";
     if (r.status === 401) { $("pass-row").hidden = false; $("key-row").hidden = !cfg.byok; $("pass").focus(); }
-    if (r.status === 400 && /API key/.test(msg)) $("own-key").focus();
+    if (/API key|Bevell/.test(msg)) $("own-key").focus();
   } catch (e) { msg = "The upload failed. Check your connection and try again."; }
   $("up-err").textContent = msg; $("up-err").hidden = false; btn.disabled = false; btn.textContent = "Make my CAD";
 }
@@ -757,7 +759,7 @@ function agentCard(id, st) {
     const r = await fetch(`/api/scans/${id}/agent`, { method: "POST", headers: accessHeaders() });
     if (!r.ok) {
       const j = await r.json().catch(() => ({})); b.textContent = j.detail || "Couldn't start. Try again."; b.disabled = false;
-      if ((r.status === 401 || r.status === 400) && !card.querySelector(".pass")) card.insertBefore(accessFields(), b);
+      if ([400, 401, 402].includes(r.status) && !card.querySelector(".pass")) card.insertBefore(accessFields(), b);
       return;
     }
     const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; agentCard(id, nst);
