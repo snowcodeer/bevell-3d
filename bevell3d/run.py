@@ -144,6 +144,10 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
                 vp = pickle.load(open(vpath, "rb"))
                 outline = top_outline(vp["views"], vp["masks"], float(final.bounds[1][2]) / 2)
             tf = write_tool_fingers(out_dir, final, outline=outline)
+            if outline is not None:                # a tool's size from the photos from above: its thin
+                r = np.array(outline.minimum_rotated_rectangle.exterior.coords)[:4]   # blade tips are
+                lw = sorted([float(np.linalg.norm(r[1] - r[0])), float(np.linalg.norm(r[2] - r[1]))], reverse=True)
+                summary["size_mm"] = [round(lw[0], 1), round(lw[1], 1), round(float(final.extents[2]), 1)]   # carved off the 3D scan
             summary["tool_fingers"] = {"jaw_gap_mm": tf["jaw_gap_tool_closed_mm"], "grip_mm": [s["width_mm"] for s in tf["saddles"]],
                                        "loops": all(s["loop"] for s in tf["saddles"]), "outline_from": tf["outline_from"]}
             # Scissors: new SO-101 jaw parts with the loops' clips built in, the scissors' pivot on
@@ -187,11 +191,13 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
     # above) and its height, not along the sheet's edges (a tool lying at an angle read 118 mm for
     # 153). model_mm stays as it was: the benchmark compares it with the true shape's.
     try:
+        if "size_mm" in summary:
+            raise StopIteration                    # a tool: already sized from its outline
         from .cad import footprint
         r = np.array(footprint(final).minimum_rotated_rectangle.exterior.coords)[:4]
         lw = sorted([float(np.linalg.norm(r[1] - r[0])), float(np.linalg.norm(r[2] - r[1]))], reverse=True)
         summary["size_mm"] = [round(lw[0], 1), round(lw[1], 1), round(float(final.extents[2]), 1)]
-    except Exception:
+    except (StopIteration, Exception):
         pass
     render(final, os.path.join(out_dir, "model.png"), f"{plan['object']} ({source})")
     render_scene([(holder, (0.85, 0.85, 0.88)), (seated(final), (0.22, 0.35, 0.95))],
