@@ -7,7 +7,7 @@ and check that they agree.
 A tree passes when Fusion builds every step and its body matches CadQuery's to within 3% in
 volume and 0.5 mm in size.
 """
-import argparse, json, sys, time
+import argparse, json, math, sys, time
 import requests
 from bevell3d.feature_tree import validate, to_cadquery, to_fusion_script
 from tests.test_feature_tree import BOTTLE, MUG
@@ -35,9 +35,19 @@ BLOCK = {
               {"id": "corners", "op": "fillet", "edges": "vertical", "radius": "r"}],
 }
 
+# A mouse-like body: spline sections (one given clockwise, to test their ordering) and a cut.
+_ring = lambda a, b, n=12: [[round(a * math.cos(2 * math.pi * k / n), 2), round(b * math.sin(2 * math.pi * k / n) * (1 + 0.15 * math.cos(2 * math.pi * k / n)), 2)] for k in range(n)]
+SPLINE_LOFT = {
+    "parameters": [{"name": "len", "value": 120, "min": 90, "max": 140, "what": "length"}],
+    "steps": [{"id": "body", "op": "loft", "sections": [{"z": 0, "shape": {"spline": _ring(60, 32)}},
+                                                       {"z": 20, "shape": {"spline": _ring(58, 30)[::-1]}},
+                                                       {"z": 36, "shape": {"spline": _ring(40, 18)}}]},
+              {"id": "wheel_slot", "op": "extrude", "shape": {"rect": {"w": 14, "l": 6}, "at": ["len/2 - 30", 0]}, "from_z": 26, "height": 20, "mode": "cut"}],
+}
+
 
 def cases():
-    out = [("bottle (hand-written)", BOTTLE), ("mug (hand-written)", MUG), ("loft, cut, chamfer", LOFT_CUT), ("block, ellipse, polygon cut, fillet", BLOCK)]
+    out = [("bottle (hand-written)", BOTTLE), ("mug (hand-written)", MUG), ("loft, cut, chamfer", LOFT_CUT), ("block, ellipse, polygon cut, fillet", BLOCK), ("spline loft, slot cut", SPLINE_LOFT)]
     for name, path in (("bottle (Muse Spark)", "out/bench/bottle/timed/agent_tree.json"), ("mouse (Muse Spark)", "out/bench/mouse/full/agent_tree.json")):
         try:
             out.append((name, json.load(open(path))))
@@ -55,13 +65,15 @@ def cadquery_report(tree, p):
     return {"volume_mm3": shape.Volume(), "size_mm": [round(float(e), 2) for e in m.extents], "warnings": warns}
 
 
-def main(keep=False):
+def main(keep=False, only=None):
     try:
         requests.get(BRIDGE, timeout=3).raise_for_status()
     except Exception:
         sys.exit("BevellBridge is not running in Fusion: Utilities > Add-Ins > Scripts and Add-Ins > Add-Ins > BevellBridge > Run")
     rows = []
     for name, tree in cases():
+        if only and only not in name:
+            continue
         validate(tree)
         p = {q["name"]: q["value"] for q in tree["parameters"]}
         t = time.time()
@@ -91,5 +103,6 @@ def main(keep=False):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("--keep", action="store_true")
-    main(ap.parse_args().keep)
+    ap = argparse.ArgumentParser(); ap.add_argument("--keep", action="store_true"); ap.add_argument("--only")
+    a = ap.parse_args()
+    main(a.keep, a.only)

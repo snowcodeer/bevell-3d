@@ -98,7 +98,41 @@ def _shape_cq(wp, shape, p):
         return wp.ellipse(ev(shape["ellipse"]["w"], p) / 2, ev(shape["ellipse"]["l"], p) / 2)
     if "polygon" in shape:
         return wp.polyline([(ev(x, p), ev(y, p)) for x, y in shape["polygon"]]).close()
+    if "spline" in shape:
+        pts = ring_order([(ev(x, p), ev(y, p)) for x, y in shape["spline"]])
+        # Point k at parameter k/n, as Fusion lofts them. CadQuery's default spaces them by chord
+        # length, so point k of one section met a different place on the next, the loft twisted,
+        # and it came out 6% thinner than Fusion's.
+        return wp.spline(pts, periodic=True, parameters=[k / len(pts) for k in range(len(pts) + 1)]).close()
     raise ValueError(f"unknown shape {list(shape)}")
+
+
+def _loft(wires):
+    """A smooth loft parametrised the way Fusion's comes out: OpenCascade's default (chord
+    length) made the agent's five-ellipse mouse 3% fuller than Fusion builds it; isoparametric
+    lands within 0.5%."""
+    import cadquery as cq
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
+    from OCP.Approx import Approx_IsoParametric
+    b = BRepOffsetAPI_ThruSections(True, False, 1e-6)
+    b.SetParType(Approx_IsoParametric)
+    for w in wires:
+        b.AddWire(w.wrapped)
+    b.Build()
+    return cq.Solid(b.Shape())
+
+
+def ring_order(pts):
+    """A closed outline's points anticlockwise, starting nearest the +X direction from their
+    centre, so the sections of a loft line up instead of twisting. Shared with the Fusion script."""
+    import math
+    pts = [tuple(q) for q in pts]
+    area = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+    if area < 0:
+        pts = pts[::-1]
+    cx = sum(q[0] for q in pts) / len(pts); cy = sum(q[1] for q in pts) / len(pts)
+    i = min(range(len(pts)), key=lambda k: abs(math.atan2(pts[k][1] - cy, pts[k][0] - cx)))
+    return pts[i:] + pts[:i]
 
 
 def _path_points(path, p):
@@ -131,14 +165,11 @@ def to_cadquery(tree, p):
             wp = cq.Workplane("XY").workplane(offset=ev(s.get("from_z", 0), p))
             combine(_shape_cq(wp, s["shape"], p).extrude(ev(s["height"], p)), mode)
         elif op == "loft":
+            # Each section on its own plane: chained, a section's "at" moved every one after it,
+            # while Fusion moves only that section.
             secs = sorted(s["sections"], key=lambda q: ev(q["z"], p))
-            wp = cq.Workplane("XY").workplane(offset=ev(secs[0]["z"], p))
-            wp = _shape_cq(wp, secs[0]["shape"], p)
-            z = ev(secs[0]["z"], p)
-            for sec in secs[1:]:
-                z2 = ev(sec["z"], p)
-                wp = _shape_cq(wp.workplane(offset=z2 - z), sec["shape"], p); z = z2
-            combine(wp.loft(combine=True), mode)
+            wires = [_shape_cq(cq.Workplane("XY").workplane(offset=ev(q["z"], p)), q["shape"], p).val() for q in secs]
+            combine(cq.Workplane("XY").add(_loft(wires)), mode)
         elif op == "sweep":
             pts = _path_points(s["path"], p)
             path = cq.Workplane("XY").spline(pts, includeCurrent=False) if len(pts) > 2 else cq.Workplane("XY").polyline(pts)
@@ -206,6 +237,19 @@ def P(x, y, z=0.0):
     return adsk.core.Point3D.create(x, y, z)
 
 
+def ring_order(pts):
+    """A closed outline's points anticlockwise, starting nearest the +X direction from their
+    centre, so the sections of a loft line up instead of twisting. Shared with the Fusion script."""
+    import math
+    pts = [tuple(q) for q in pts]
+    area = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+    if area < 0:
+        pts = pts[::-1]
+    cx = sum(q[0] for q in pts) / len(pts); cy = sum(q[1] for q in pts) / len(pts)
+    i = min(range(len(pts)), key=lambda k: abs(math.atan2(pts[k][1] - cy, pts[k][0] - cx)))
+    return pts[i:] + pts[:i]
+
+
 def run(context):
     app = adsk.core.Application.get()
     report = build(app.userInterface, close=False)
@@ -261,6 +305,11 @@ def build(ui=None, close=False):
                 pts = [P(cx + cm(x), cy + cm(y)) for x, y in shape["polygon"]]
                 for a, b in zip(pts, pts[1:] + pts[:1]):
                     sketch.sketchCurves.sketchLines.addByTwoPoints(a, b)
+            elif "spline" in shape:
+                pts = adsk.core.ObjectCollection.create()
+                for x, y in ring_order([(cm(x), cm(y)) for x, y in shape["spline"]]):
+                    pts.add(P(cx + x, cy + y))
+                sketch.sketchCurves.sketchFittedSplines.add(pts).isClosed = True
 
         def edges_of(kind):
             b = root.bRepBodies.item(0)
@@ -384,7 +433,7 @@ def build(ui=None, close=False):
 # l, b, t and r on 3 Nov), so short names and unit names get "_mm" in the Fusion script only.
 FUSION_UNIT_NAMES = {"mm", "cm", "m", "km", "um", "nm", "in", "inch", "ft", "foot", "yd", "mi", "mil",
                      "deg", "rad", "l", "ml", "g", "kg", "lb", "oz", "s", "min", "hr", "t"}
-_NOT_EXPRESSIONS = {"op", "id", "mode", "edges", "plane"}
+_NOT_EXPRESSIONS = {"op", "id", "mode", "edges", "plane", "open"}
 
 
 def _fusion_names(tree):

@@ -291,6 +291,11 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   - If every sketch fails with a missing `.../Resources/sketch/Sketch_feature` folder, Fusion
     is running from a half-downloaded update: quit it fully and reopen. That is what broke the
     first BevellBottle run.
+  - **Lofts must match Fusion's.** CadQuery lofts are built section by section on their own
+    planes (a chained `at` used to move every later section), isoparametrically
+    (`_loft`; OpenCascade's default made the mouse 3% fuller than Fusion builds it), and a
+    `spline` shape puts point k at parameter k/n (by chord length the sections twisted and
+    the loft came out 6% thin). Seven cases pass, the seventh a spline loft with a cut.
   - `write_fusion_zip` rewrites a scan's script and `agent_fusion.zip` from its
     `agent_tree.json`; `seed_examples` uses it, so the examples carry today's script.
 - **`bevell3d/agent_cad.py`** (`python -m bevell3d.agent_cad <scan dir> --rounds 2`):
