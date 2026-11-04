@@ -61,12 +61,16 @@ def _extrude(poly, z0, z1):
     return trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
 
 
-def loop_clip_mesh(outline, h, p=FingerParams(), span=None, wall=1.8, lip=0.45, lip_width=1.2):
+def loop_clip_mesh(outline, h, p=FingerParams(), span=None, wall=1.8, lip=0.5, lip_width=1.2, arm_top=True):
     """A clip that snaps round one finger-loop ring, in the sheet frame: the ring's stretch round
-    the grasp point (its own curve) inside a channel with a `wall` mm wall, open on the hole side
-    but for a lip at the top and bottom edges standing `lip` mm into the ring's thickness. The
-    ring presses in past the lips and is held. Returns the clip and its outside face's centre."""
-    c = np.array(h["centre_mm"]); t = h["thickness_mm"]; z0 = h["z_mm"]
+    the grasp point (its own curve) inside a channel with a `wall` mm wall, open on the hole side.
+    The ring goes in from the hole side and is held by one lip, on the wall away from the arm
+    (`arm_top`: the arm joins the clip's top face), narrowing the mouth to `lip` mm less than the ring's thickness:
+    the arm stiffens the wall it joins, so only the other can flex. The lip has a stepped lead-in,
+    so the mouth starts wider than the ring and narrows to the lip. Returns the clip, its report
+    and a keep-out (the channel, the mouth and the hole in front of it) that nothing added later
+    may fill."""
+    c = np.array(h["centre_mm"]); t = h["thickness_mm"]; z0 = h["z_mm"]; cl = p.clearance
     holes = [Polygon(r) for r in outline.interiors if Polygon(r).area > 20]
     hole = min(holes, key=lambda g: g.distance(Point(c)))
     if span is None:                                   # half the loop's length: a C round the end, not a blob
@@ -75,33 +79,68 @@ def loop_clip_mesh(outline, h, p=FingerParams(), span=None, wall=1.8, lip=0.45, 
     ring = outline.intersection(hole.buffer(h["width_mm"] + 3.0)).difference(hole)
     window = Point(c).buffer(span / 2, 64)
     ring_w = ring.intersection(window)
-    footprint = ring_w.buffer(wall, 32).intersection(window.buffer(wall)).difference(hole.buffer(-lip_width, 32))
+    inner = hole.buffer(-lip_width, 32)                # the mouth's face, inside the hole
+    footprint = ring_w.buffer(wall, 32).intersection(window.buffer(wall)).difference(inner)
     body = _extrude(footprint, z0 - wall, z0 + t + wall)
-    body = trimesh.boolean.difference([body, _extrude(ring_w.buffer(p.clearance, 32), z0 - p.clearance, z0 + t + p.clearance)], engine="manifold")
-    strip = footprint.difference(ring_w.buffer(p.clearance, 32)).intersection(hole.buffer(p.clearance + 0.05, 32))
-    if not strip.is_empty and strip.area > 0.05:
-        body = trimesh.boolean.difference([body, _extrude(strip, z0 + lip, z0 + t - lip)], engine="manifold")
-    return body, {"span_mm": round(span, 1), "wall_mm": wall, "snap_lip_mm": lip, "opening_mm": round(t - 2 * lip, 2),
-                  "ring_mm": [h["width_mm"], t]}
+    channel = _extrude(ring_w.buffer(cl, 32), z0 - cl, z0 + t + cl)
+    band = footprint.difference(ring_w.buffer(cl, 32)).intersection(hole.buffer(cl + 0.05, 32))
+    # The lip on the free wall only, its height from the channel's floor: the clearance either side
+    # plus the snap, so the mouth is `lip` narrower than the ring (the arm-side wall stays flush).
+    lip_h = 2 * cl + lip
+    lo_lip, hi_lip = (lip_h, 0.0) if arm_top else (0.0, lip_h)
+    cuts = [channel]
+    if not band.is_empty and band.area > 0.05:
+        # The mouth, in three steps from the hole inwards: wider than the ring, half the lip, the lip.
+        for frac, k in ((1 / 3, 1.0), (2 / 3, 0.5), (1.0, 0.0)):
+            near = band.intersection(inner.buffer(lip_width * frac + 0.05, 32))
+            if near.is_empty or near.area < 0.05:
+                continue
+            lo = z0 - cl + lo_lip * (1 - k)
+            hi = z0 + t + cl - hi_lip * (1 - k)
+            cuts.append(_extrude(near, lo, hi))
+    body = trimesh.boolean.difference([body] + cuts, engine="manifold")
+    # Kept clear for the ring's way in: the channel, the mouth and the hole in front of it.
+    front = inner.intersection(window.buffer(wall + 3.0))
+    keep = [channel] + cuts[1:]
+    if not front.is_empty and front.area > 0.05:
+        keep.append(_extrude(front, z0 - cl, z0 + t + cl))
+    keepout = trimesh.boolean.union(keep, engine="manifold") if len(keep) > 1 else keep[0]
+    return body, {"span_mm": round(span, 1), "wall_mm": wall, "snap_lip_mm": lip, "snap_side": "one wall, away from the arm",
+                  "opening_mm": round(t - lip, 2), "lead_in_mm": round(t + 2 * cl, 2),
+                  "ring_mm": [h["width_mm"], t]}, keepout
+
+
+ROUND_MM = 2.0      # every edge of an arm is rounded to this radius
+
+
+def _rounded_hull(pts, r=ROUND_MM):
+    """The convex hull of `pts` with every edge and corner rounded to `r`: the hull of a sphere at
+    each vertex of the hull shrunk by `r` towards its centre (a Minkowski sum, near enough)."""
+    core = trimesh.convex.convex_hull(pts)
+    v = core.vertices; ctr = core.centroid
+    d = v - ctr; n = np.linalg.norm(d, axis=1, keepdims=True) + 1e-9
+    v = ctr + d * np.clip((n - r) / n, 0.2, 1.0)
+    ball = trimesh.creation.icosphere(subdivisions=2, radius=r).vertices
+    return trimesh.convex.convex_hull((v[:, None, :] + ball[None, :, :]).reshape(-1, 3))
 
 
 def _arm(clip, part, toward, thickness=6.0, embed=2.0):
-    """A solid arm from a clip to a part: the hull of the clip's face that looks at the part and the
-    nearest patch of the part's surface, pushed `embed` mm into it."""
+    """A solid arm from a clip to a part: the hull of the clip's face that looks at the part and a
+    flared patch of the part's surface, pushed `embed` mm into it, with every edge rounded. The
+    flare (half as wide again as the clip's face) meets the part at a shallow angle instead of a
+    hard step."""
     pts = clip.vertices
     d = pts @ toward
-    face = pts[d > d.max() - 1.5]                      # the clip's side that faces the part
+    face = pts[d > d.max() - 0.6]                      # the clip's face that looks at the part
     centre = face.mean(0)
     target, dist, _ = trimesh.proximity.closest_point(part, [centre])
     target = target[0]
     n = (target - centre) / (np.linalg.norm(target - centre) + 1e-9)
-    # A patch on the part round the target, as big as the clip's face, sunk into the part.
-    span = np.ptp(face, axis=0); r = max(3.0, min(8.0, 0.5 * float(np.sort(span)[-2])))
+    span = np.ptp(face, axis=0); r = max(4.0, min(12.0, 0.75 * float(np.sort(span)[-2])))
     a = np.cross(n, [0, 0, 1.0]); a = a if np.linalg.norm(a) > 0.1 else np.cross(n, [1.0, 0, 0]); a /= np.linalg.norm(a)
     b = np.cross(n, a)
-    patch = np.array([target + n * embed + a * sa * r + b * sb * thickness / 2 for sa in (-1, 1) for sb in (-1, 1)])
-    hull = trimesh.convex.convex_hull(np.vstack([face, patch]))
-    return hull, float(dist[0])
+    patch = np.array([target + n * embed + a * sa * r + b * sb * (thickness * 0.75) for sa in (-1, 1) for sb in (-1, 1)])
+    return _rounded_hull(np.vstack([face, patch])), float(dist[0])
 
 
 def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=FingerParams()):
@@ -163,10 +202,11 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     # Put the scissors' middle plane at y_mid.
     probe = S @ np.r_[pivot, mesh.bounds[0][2] + t / 2, 1]
     S[:3, 3] += np.array([0, y_mid - probe[1], 0])
-    clips, reps = [], []
+    clips, reps, keepouts = [], [], []
+    arm_top = bool(W @ np.array([0, -side, 0]) > 0)       # the arms join the clips' top faces
     for h in info["handles"]:
-        c, d = loop_clip_mesh(outline, h, p)
-        clips.append(c.copy().apply_transform(S)); reps.append(d)
+        c, d, k = loop_clip_mesh(outline, h, p, arm_top=arm_top)
+        clips.append(c.copy().apply_transform(S)); reps.append(d); keepouts.append(k.copy().apply_transform(S))
     # Which loop the moving jaw drives: turning it with the jaw (about H along -y, the opening
     # sense) must take it away from the other loop.
     cen = [cl.centroid for cl in clips]
@@ -178,8 +218,11 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     # Arms, then each clip joined to its part (in the gripper frame at q = 0), back to part coordinates.
     arm_m, dm = _arm(clips[km], moving_g, np.array([0, -side, 0]))
     arm_f, df = _arm(clips[1 - km], fixed_g, np.array([0, -side, 0]))
-    new_moving = trimesh.boolean.union([moving_g, clips[km], arm_m], engine="manifold").apply_transform(np.linalg.inv(Tm0))
-    new_fixed = trimesh.boolean.union([fixed_g, clips[1 - km], arm_f], engine="manifold").apply_transform(np.linalg.inv(Tf))
+    # Then each part has its loop's way in cut clear again: the rounded arm must not reach into it.
+    new_moving = trimesh.boolean.union([moving_g, clips[km], arm_m], engine="manifold")
+    new_moving = trimesh.boolean.difference([new_moving, keepouts[km]], engine="manifold").apply_transform(np.linalg.inv(Tm0))
+    new_fixed = trimesh.boolean.union([fixed_g, clips[1 - km], arm_f], engine="manifold")
+    new_fixed = trimesh.boolean.difference([new_fixed, keepouts[1 - km]], engine="manifold").apply_transform(np.linalg.inv(Tf))
     # The scissors halves for the simulation: the scan cut down the middle (v = 0), in the gripper frame.
     sc = mesh.copy().apply_transform(S)
     pv = (S @ np.r_[pivot, mesh.bounds[0][2] + t / 2, 1])[:3]
