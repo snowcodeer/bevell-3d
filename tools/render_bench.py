@@ -20,6 +20,7 @@ ap.add_argument("--y", type=float, default=105.0)
 ap.add_argument("--yaw", type=float, default=0.0)
 ap.add_argument("--res", default="2016x1512")
 ap.add_argument("--samples", type=int, default=24)
+ap.add_argument("--colour", help="r,g,b in 0..1 for an untextured part, e.g. 0.75,0.2,0.15")
 a = ap.parse_args(argv)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -66,6 +67,9 @@ obj = bpy.context.selected_objects[0]
 tex = os.path.join(os.path.dirname(os.path.abspath(a.obj)), "..", "materials", "textures", "texture.png")
 if os.path.exists(tex):
     mat = principled("object", image=tex, rough=0.5)
+    obj.data.materials.clear(); obj.data.materials.append(mat)
+elif a.colour:
+    mat = principled("object", colour=tuple(float(c) for c in a.colour.split(",")), rough=0.45)
     obj.data.materials.clear(); obj.data.materials.append(mat)
 obj.rotation_euler = Euler((0, 0, math.radians(a.yaw)))
 obj.location = (a.x / 1000, a.y / 1000, 0.0)

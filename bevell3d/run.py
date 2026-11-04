@@ -64,6 +64,93 @@ def agreement(mesh, views, masks, size):
     return float(np.mean([iou(silhouette(mesh, v, size), m) for v, m in zip(views, masks)]))
 
 
+def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings, t0, log=print, progress=lambda stage, detail="": None):
+    """Everything made from the final model: the CAD, the holders, the gripper pads, the
+    renders and summary.json. Split from run() so a finished scan can be made again after a
+    change to these steps without new photos or model calls (recad)."""
+    import time
+    holder_base = hull if summary["hull_agreement"] >= HULL_HOLDER_AGREEMENT else final
+    # The nest follows the object's underside, on a voxel grid; kept as an alternative print.
+    t = time.time(); progress("cad", "writing CAD and cutting the holder")
+    nest, nrep = make_holder(holder_base)
+    nest.export(os.path.join(out_dir, "holder_nest.stl"))
+    summary["nest"] = nrep
+    # CAD: the model as STEP (a revolve or loft where it can be, else its mesh sewn into a
+    # solid) and the parametric holder as STEP, its STL and a top-view DXF. The CAD holder
+    # fitted the benchmark better than the nest (mouse: 1.6 mm worst catch against 5.7 mm).
+    holder = nest
+    try:
+        import cadquery as cq
+        from .cad import to_cad, holder_cad_safe, to_mesh, write_dxf
+        solid, kind, info, why = to_cad(final, plan["route"])
+        if kind == "mesh":
+            # Freeform: smooth NURBS patches instead of the mesh's flat triangles, when they work.
+            progress("cad", "smoothing the CAD surface")
+            try:
+                from .nurbs import scan_to_nurbs
+                solid, info = scan_to_nurbs(os.path.join(out_dir, "model.stl"))
+                kind = "nurbs"
+            except Exception as e:                   # the triangle STEP still stands; say why
+                why["nurbs"] = f"{type(e).__name__}: {e}"
+        tree = info.pop("_tree", None) if isinstance(info, dict) else None
+        if tree:                                     # prismatic: the CAD as an editable timeline too
+            from .feature_tree import write_fusion_zip
+            json.dump(tree, open(os.path.join(out_dir, "model_tree.json"), "w"), indent=1)
+            write_fusion_zip(out_dir, tree, f"{plan['object']}: {tree['features']}", n_photos, name="model_fusion")
+        cq.exporters.export(cq.Workplane().add(solid), os.path.join(out_dir, "model.step"))
+        to_mesh(solid).export(os.path.join(out_dir, "model_cad.stl"))   # what the viewer shows
+        summary["cad"] = {"kind": kind, "info": {k: v for k, v in info.items() if not isinstance(v, dict)},
+                          "why_not": {k: str(v)[:160] for k, v in why.items()}}
+        h, hrep, pocket, outer = holder_cad_safe(holder_base)
+        cq.exporters.export(cq.Workplane().add(h), os.path.join(out_dir, "holder.step"))
+        write_dxf(os.path.join(out_dir, "holder_top.dxf"), pocket, outer)
+        holder = to_mesh(h)
+        log(f"CAD: model as {kind}; holder {hrep['holder_mm']} mm")
+    except Exception as e:                           # the meshes still stand; say why
+        summary["cad_error"] = f"{type(e).__name__}: {e}"
+        hrep = nrep
+        log("CAD skipped:", summary["cad_error"])
+    hrep["cut_round"] = "hull" if holder_base is hull else source
+    holder.export(os.path.join(out_dir, "holder.stl"))
+    # Bambu Studio opens a 3MF from a link, not an STL: the holder, ready to slice.
+    try:
+        holder.export(os.path.join(out_dir, "holder.3mf"))
+    except Exception as e:                           # a missing 3MF must not lose the scan
+        summary["threemf_error"] = f"{type(e).__name__}: {e}"
+    timings["cad_and_holder"] = round(time.time() - t, 1)
+    # Gripper pads for a robot to hold the object by its own shape (SO-101 jaws by default).
+    try:
+        from .gripper import write_pads
+        _, grasp = write_pads(out_dir, final)
+        summary["grasp"] = {k: grasp[k] for k in ("centre_mm", "squeeze_axis", "closed_on_object_mm")}
+    except Exception as e:
+        summary["pads_error"] = f"{type(e).__name__}: {e}"
+    timings["total"] = round(time.time() - t0, 1)
+    summary["timings_s"] = timings
+    progress("done", "ready")
+    summary.update(model_source=source, model_mm=[round(float(e), 1) for e in final.bounds[1] - final.bounds[0]], holder=hrep)
+    render(final, os.path.join(out_dir, "model.png"), f"{plan['object']} ({source})")
+    render_scene([(holder, (0.85, 0.85, 0.88)), (seated(final), (0.22, 0.35, 0.95))],
+                 os.path.join(out_dir, "holder.png"), f"Holder for the {plan['object']}")
+    json.dump(summary, open(os.path.join(out_dir, "summary.json"), "w"), indent=1, default=float)
+
+
+def recad(out_dir, log=print):
+    """Make a finished scan's outputs again with today's code."""
+    import time
+    summary = json.load(open(os.path.join(out_dir, "summary.json")))
+    plan = json.load(open(os.path.join(out_dir, "plan.json"))) if os.path.exists(os.path.join(out_dir, "plan.json")) else summary["plan"]
+    final, hull = trimesh.load(os.path.join(out_dir, "model.stl")), trimesh.load(os.path.join(out_dir, "hull.stl"))
+    for stale in ("model_tree.json", "model_fusion.zip"):
+        if os.path.exists(os.path.join(out_dir, stale)):
+            os.remove(os.path.join(out_dir, stale))
+    timings = dict(summary.get("timings_s", {}))
+    t0 = time.time() - timings.get("total", 0) + timings.get("cad_and_holder", 0)
+    n = summary.get("scan", {}).get("photos", 16)
+    make_outputs(out_dir, final, hull, plan, summary, summary.get("model_source", "hull"), n, timings, t0, log)
+    return summary
+
+
 def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=lambda stage, detail="": None):
     import time
     os.makedirs(out_dir, exist_ok=True)
@@ -112,66 +199,8 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
     from .cad import solidify
     final, summary["solidified"] = solidify(final)
     final.export(os.path.join(out_dir, "model.stl"))
-    holder_base = hull if summary["hull_agreement"] >= HULL_HOLDER_AGREEMENT else final
-    # The nest follows the object's underside, on a voxel grid; kept as an alternative print.
-    t = time.time(); progress("cad", "writing CAD and cutting the holder")
-    nest, nrep = make_holder(holder_base)
-    nest.export(os.path.join(out_dir, "holder_nest.stl"))
-    summary["nest"] = nrep
-    # CAD: the model as STEP (a revolve or loft where it can be, else its mesh sewn into a
-    # solid) and the parametric holder as STEP, its STL and a top-view DXF. The CAD holder
-    # fitted the benchmark better than the nest (mouse: 1.6 mm worst catch against 5.7 mm).
-    holder = nest
-    try:
-        import cadquery as cq
-        from .cad import to_cad, holder_cad_safe, to_mesh, write_dxf
-        solid, kind, info, why = to_cad(final, plan["route"])
-        if kind == "mesh":
-            # Freeform: smooth NURBS patches instead of the mesh's flat triangles, when they work.
-            progress("cad", "smoothing the CAD surface")
-            try:
-                from .nurbs import scan_to_nurbs
-                solid, info = scan_to_nurbs(os.path.join(out_dir, "model.stl"))
-                kind = "nurbs"
-            except Exception as e:                   # the triangle STEP still stands; say why
-                why["nurbs"] = f"{type(e).__name__}: {e}"
-        cq.exporters.export(cq.Workplane().add(solid), os.path.join(out_dir, "model.step"))
-        to_mesh(solid).export(os.path.join(out_dir, "model_cad.stl"))   # what the viewer shows
-        summary["cad"] = {"kind": kind, "info": {k: v for k, v in info.items() if not isinstance(v, dict)},
-                          "why_not": {k: str(v)[:160] for k, v in why.items()}}
-        h, hrep, pocket, outer = holder_cad_safe(holder_base)
-        cq.exporters.export(cq.Workplane().add(h), os.path.join(out_dir, "holder.step"))
-        write_dxf(os.path.join(out_dir, "holder_top.dxf"), pocket, outer)
-        holder = to_mesh(h)
-        log(f"CAD: model as {kind}; holder {hrep['holder_mm']} mm")
-    except Exception as e:                           # the meshes still stand; say why
-        summary["cad_error"] = f"{type(e).__name__}: {e}"
-        hrep = nrep
-        log("CAD skipped:", summary["cad_error"])
-    hrep["cut_round"] = "hull" if holder_base is hull else source
-    holder.export(os.path.join(out_dir, "holder.stl"))
-    # Bambu Studio opens a 3MF from a link, not an STL: the holder, ready to slice.
-    try:
-        holder.export(os.path.join(out_dir, "holder.3mf"))
-    except Exception as e:                           # a missing 3MF must not lose the scan
-        summary["threemf_error"] = f"{type(e).__name__}: {e}"
-    timings["cad_and_holder"] = round(time.time() - t, 1)
-    # Gripper pads for a robot to hold the object by its own shape (SO-101 jaws by default).
-    try:
-        from .gripper import write_pads
-        _, grasp = write_pads(out_dir, final)
-        summary["grasp"] = {k: grasp[k] for k in ("centre_mm", "squeeze_axis", "closed_on_object_mm")}
-    except Exception as e:
-        summary["pads_error"] = f"{type(e).__name__}: {e}"
-    timings["total"] = round(time.time() - t0, 1)
-    summary["timings_s"] = timings
-    progress("done", "ready")
-    summary.update(model_source=source, model_mm=[round(float(e), 1) for e in final.bounds[1] - final.bounds[0]], holder=hrep)
-    render(final, os.path.join(out_dir, "model.png"), f"{plan['object']} ({source})")
-    render_scene([(holder, (0.85, 0.85, 0.88)), (seated(final), (0.22, 0.35, 0.95))],
-                 os.path.join(out_dir, "holder.png"), f"Holder for the {plan['object']}")
-    json.dump(summary, open(os.path.join(out_dir, "summary.json"), "w"), indent=1, default=float)
-    log(f"done: model from {source}, {summary['model_mm']} mm; holder {hrep['holder_mm']} mm -> {out_dir}")
+    make_outputs(out_dir, final, hull, plan, summary, source, len(photo_paths), timings, t0, log, progress)
+    log(f"done: model from {source}, {summary['model_mm']} mm; holder {summary['holder']['holder_mm']} mm -> {out_dir}")
     return summary
 
 
@@ -180,7 +209,11 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--prompt", help="skip the planner and ask SAM 3.1 for this")
     ap.add_argument("--no-sam3d", action="store_true")
-    ap.add_argument("photos", nargs="+")
+    ap.add_argument("--recad", action="store_true", help="make the outputs of the finished scan in --out again")
+    ap.add_argument("photos", nargs="*")
     a = ap.parse_args()
-    paths = sorted(p for g in a.photos for p in glob.glob(g))
-    run(paths, a.out, a.prompt, not a.no_sam3d)
+    if a.recad:
+        recad(a.out)
+    else:
+        paths = sorted(p for g in a.photos for p in glob.glob(g))
+        run(paths, a.out, a.prompt, not a.no_sam3d)

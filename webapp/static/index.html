@@ -356,7 +356,7 @@ const STAGES = [
   ["sam3d", "Generating the full shape"], ["fit", "Sizing it"], ["cad", "CAD and holder"],
 ];
 const ROUTE = { flat: "Flat part", revolved: "Round, turned shape", freeform: "Freeform shape" };
-const CAD = { revolved: "Editable profile", lofted: "Editable sections", nurbs: "Smooth NURBS", mesh: "Mesh in STEP" };
+const CAD = { revolved: "Editable profile", prismatic: "Sketch + extrude", lofted: "Editable sections", nurbs: "Smooth NURBS", mesh: "Mesh in STEP" };
 const planHTML = (p) => `<div class="small muted">Muse Spark</div><div><span class="tag">${ROUTE[p.route] || esc(p.route)}</span>${esc(p.object)}</div>
   ${p.photo_issues?.length ? `<ul class="issues">${p.photo_issues.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}`;
 let polling;
@@ -414,6 +414,12 @@ function agentCard(id, st) {
   if (a?.state === "running" || a?.state === "queued") {
     card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>Writing and checking the CAD…</b><span class="muted small">${esc(a.detail || "")}${a.elapsed ? ` · ${a.elapsed} s` : ""}</span>`;
     agentPoll = setTimeout(async () => { if (!location.hash.startsWith("#result/" + id)) return; const nst = await (await fetch(`/api/scans/${id}`)).json(); nst.id = id; scan = nst; if (nst.agent?.state === "done") resultScreen(id); else agentCard(id, nst); }, 2000);
+    return;
+  }
+  if (f["model_fusion.zip"]) {                     // prismatic: the CAD is already a sketch-and-extrude timeline
+    card.innerHTML = `<div class="small muted">Editable CAD</div><b>Already editable: sketches and extrusions</b>
+      <span class="muted small">Heights and hole sizes are named parameters.</span>
+      <div class="examples"><a class="chip" href="${f["model_fusion.zip"]}" download>Fusion 360</a>${f["model_tree.json"] ? `<a class="chip" href="${f["model_tree.json"]}" download>Feature tree</a>` : ""}</div>`;
     return;
   }
   card.innerHTML = `<div class="small muted">Editable CAD · Muse Spark</div><b>Turn it into features you can edit</b>

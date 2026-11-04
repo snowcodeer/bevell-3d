@@ -20,6 +20,8 @@ FILES = {  # name -> (label, media type)
     "model.step": ("Model, STEP", "application/step"),
     "model.stl": ("Model as scanned, STL", "model/stl"),
     "model_cad.stl": ("Model from the CAD, STL", "model/stl"),
+    "model_fusion.zip": ("Fusion 360 script: the CAD as sketches and extrusions", "application/zip"),
+    "model_tree.json": ("The CAD's feature tree, JSON", "application/json"),
     "holder.step": ("Holder, STEP", "application/step"),
     "holder.stl": ("Holder, STL", "model/stl"),
     "holder.3mf": ("Holder, 3MF", "model/3mf"),

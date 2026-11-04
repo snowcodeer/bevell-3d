@@ -55,3 +55,25 @@ def test_a_shell_open_underneath_is_filled_and_an_open_top_mug_is_not():
     mug = trimesh.boolean.difference([mug_out, mug_in], engine="manifold")
     same, rep = solidify(mug)
     assert not rep["filled"] and same is mug, rep
+
+
+def test_a_stepped_bracket_becomes_stacked_extrusions_and_a_sloped_stand_does_not():
+    import numpy as np
+    from bevell3d.cad import prismatic_cad
+    from bevell3d.feature_tree import to_cadquery, validate
+    from tools.make_parts import bracket, wedge_stand
+
+    def mesh_of(make):
+        s = make().val(); vs, fs = s.tessellate(0.02, 0.1)
+        m = trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs)); m.apply_translation(-m.bounds[0]); return m
+
+    m = mesh_of(bracket)
+    solid, info, tree = prismatic_cad(m)
+    assert info["levels"] == 2 and info["holes"] == 3 and info["level_heights_mm"] == [8.0, 22.0], info
+    assert abs(solid.Volume() / m.volume - 1) < 0.01
+    validate(tree)
+    rebuilt, _ = to_cadquery(tree, {q["name"]: q["value"] for q in tree["parameters"]})
+    assert abs(rebuilt.Volume() / m.volume - 1) < 0.01
+    assert {q["name"] for q in tree["parameters"]} == {"level1_h", "level2_h", "hole1_d", "hole2_d", "hole3_d"}
+    solid, why, tree = prismatic_cad(mesh_of(wedge_stand))
+    assert solid is None and "levels" in why, why

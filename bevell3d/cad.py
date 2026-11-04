@@ -15,6 +15,7 @@ not is dropped for the next way in.
 """
 import os
 from dataclasses import dataclass, asdict
+import math
 import numpy as np, trimesh, cv2
 import cadquery as cq
 from shapely.geometry import Polygon
@@ -237,8 +238,116 @@ def main_body(mesh):
     return max(parts, key=lambda p: p.area) if len(parts) > 1 else mesh
 
 
+def _circle_of(ring, rel=0.03, floor=0.3):
+    """(cx, cy, r) when a closed ring is a circle within max(`floor` mm, `rel` of r), else None."""
+    xy = np.asarray(ring)[:-1]
+    if len(xy) < 8:
+        return None
+    A = np.c_[2 * xy, np.ones(len(xy))]
+    cx, cy, k = np.linalg.lstsq(A, (xy ** 2).sum(1), rcond=None)[0]
+    r = math.sqrt(max(k + cx * cx + cy * cy, 0))
+    d = np.hypot(xy[:, 0] - cx, xy[:, 1] - cy)
+    return (float(cx), float(cy), float(r)) if np.max(np.abs(d - r)) < max(floor, rel * r) else None
+
+
+def prismatic_levels(body, step_mm=1.0, change=0.06, max_levels=4):
+    """Split a solid into levels whose horizontal outline does not change: a part made of
+    stacked extrusions (a bracket, a gear with a hub, a block). Returns [(z0, z1, outline)] in
+    the sheet frame, or (None, why). A run of slices shorter than 3% of the height between two
+    levels is a transition (the scan rounds the top and bottom edges) and joins its neighbours."""
+    from shapely.ops import unary_union
+    z0, z1 = float(body.bounds[0][2]), float(body.bounds[1][2])
+    n = int(np.clip((z1 - z0) / step_mm, 20, 160))
+    zs = z0 + (np.arange(n) + 0.5) / n * (z1 - z0)
+    slices = []
+    for z in zs:
+        sec = body.section(plane_origin=(0, 0, z), plane_normal=(0, 0, 1))
+        if sec is None:
+            return None, f"no material at {z - z0:.1f} mm"
+        g = unary_union(sec.to_planar(to_2D=np.eye(4))[0].polygons_full).buffer(0)
+        slices.append(g)
+    runs, start = [], 0
+    for i in range(1, n + 1):
+        if i == n or slices[i].symmetric_difference(slices[start]).area > change * max(slices[start].area, slices[i].area):
+            runs.append((start, i)); start = i
+    minimum = max(2, int(0.03 * n))
+    levels = [r for r in runs if r[1] - r[0] >= minimum]
+    if not levels:
+        return None, "no level is tall enough"
+    if len(levels) > max_levels:
+        return None, f"{len(levels)} levels; a prismatic part has at most {max_levels}"
+    out = []
+    for k, (a, b) in enumerate(levels):
+        za = z0 if k == 0 else (zs[levels[k - 1][1] - 1] + zs[a]) / 2
+        zb = z1 if k == len(levels) - 1 else (zs[b - 1] + zs[levels[k + 1][0]]) / 2
+        out.append((za, zb, slices[(a + b) // 2].simplify(0.25)))
+    return out, None
+
+
+def prismatic_cad(body, max_off=0.10):
+    """Stacked extrusions with true circular holes, and the same part as a feature tree.
+    Accepted only when the solid and the extrusions differ by under `max_off` of the volume."""
+    levels, why = prismatic_levels(body)
+    if levels is None:
+        return None, why, None
+    solid, steps, params, circles, other_cuts = None, [], [], [], []
+    for k, (za, zb, outline) in enumerate(levels):
+        params.append({"name": f"level{k + 1}_h", "value": round(float(zb - za), 2), "min": round(float(zb - za) / 2, 2),
+                       "max": round(2 * float(zb - za), 2), "what": f"height of level {k + 1}"})
+        from_z = round(za - levels[0][0], 2) if k == 0 else " + ".join(f"level{i + 1}_h" for i in range(k))
+        polys = [q for q in getattr(outline, "geoms", [outline]) if q.area >= 4]
+        for j, poly in enumerate(polys):
+            outer = [(float(x), float(y)) for x, y in np.asarray(poly.exterior.coords)[:-1]]
+            wires = [cq.Wire.makePolygon([cq.Vector(x, y, za) for x, y in outer], close=True)]
+            for ring in poly.interiors:
+                c = _circle_of(list(ring.coords))
+                if c and c[2] > 0.5:
+                    wires.append(cq.Wire.makeCircle(c[2], cq.Vector(c[0], c[1], za), cq.Vector(0, 0, 1)))
+                    # One hole through several levels is one feature with one diameter.
+                    same = next((h for h in circles if h["last"] == k - 1 and math.hypot(h["c"][0] - c[0], h["c"][1] - c[1]) < 0.6
+                                 and abs(h["c"][2] - c[2]) < 0.4), None)
+                    if same:
+                        same["last"] = k
+                    else:
+                        circles.append({"c": c, "first": k, "last": k})
+                else:
+                    pts = [(float(x), float(y)) for x, y in np.asarray(ring.coords)[:-1]]
+                    wires.append(cq.Wire.makePolygon([cq.Vector(x, y, za) for x, y in pts], close=True))
+                    other_cuts.append((k, pts))
+            piece = cq.Solid.extrudeLinear(cq.Face.makeFromWires(wires[0], wires[1:]), cq.Vector(0, 0, zb - za))
+            solid = piece if solid is None else solid.fuse(piece)
+            steps.append({"id": f"level{k + 1}" + (f"_{j + 1}" if len(polys) > 1 else ""), "op": "extrude", "mode": "add",
+                          "shape": {"polygon": [[round(x, 2), round(y, 2)] for x, y in outer]}, "from_z": from_z, "height": f"level{k + 1}_h"})
+    z_of = lambda k: "0" if k == 0 else " + ".join(f"level{i + 1}_h" for i in range(k))
+    for i, h in enumerate(circles, 1):
+        cx, cy, r = h["c"]
+        params.append({"name": f"hole{i}_d", "value": round(2 * r, 2), "min": round(r, 2), "max": round(4 * r, 2), "what": f"hole {i} diameter"})
+        steps.append({"id": f"hole{i}", "op": "extrude", "mode": "cut", "shape": {"circle": {"d": f"hole{i}_d"}, "at": [round(cx, 2), round(cy, 2)]},
+                      "from_z": z_of(h["first"]), "height": " + ".join(f"level{j + 1}_h" for j in range(h["first"], h["last"] + 1))})
+    for i, (k, pts) in enumerate(other_cuts, 1):
+        steps.append({"id": f"opening{i}", "op": "extrude", "mode": "cut", "shape": {"polygon": [[round(x, 2), round(y, 2)] for x, y in pts]},
+                      "from_z": z_of(k), "height": f"level{k + 1}_h"})
+    holes = len(circles)
+    solid = solid.clean()
+    vol = abs(body.volume)
+    off = None
+    try:
+        cad = to_mesh(solid)
+        off = trimesh.boolean.difference([body, cad], engine="manifold").volume + trimesh.boolean.difference([cad, body], engine="manifold").volume
+        off /= vol
+    except Exception:
+        off = abs(solid.Volume() / vol - 1)
+    info = {"levels": len(levels), "level_heights_mm": [round(float(b - a), 1) for a, b, _ in levels], "holes": holes,
+            "off_volume_share": round(float(off), 3)}
+    if off > max_off:
+        return None, f"stacked extrusions differ by {off:.0%} of the volume", None
+    tree = {"features": f"{len(levels)} extruded level(s)" + (f" with {holes} round hole(s)" if holes else ""),
+            "parameters": params, "steps": steps}
+    return solid, info, tree
+
+
 def to_cad(mesh, route="freeform"):
-    """Returns (solid, kind, info, why_not) trying revolve, loft, then mesh. Muse Spark's
+    """Returns (solid, kind, info, why_not) trying revolve, stacked extrusions, loft, then mesh. Muse Spark's
     route only lowers the roundness bar for a revolve; the volume check still decides."""
     why = {}
     body = main_body(mesh)
@@ -247,6 +356,14 @@ def to_cad(mesh, route="freeform"):
         if s is not None:
             return s, "revolved", info, why
         why["revolved"] = info
+    # Stacked extrusions: a bracket, a gear, a block. Its feature tree rides in info["_tree"].
+    try:
+        s, info, tree = prismatic_cad(body)
+    except Exception as e:
+        s, info, tree = None, f"{type(e).__name__}: {e}", None
+    if s is not None:
+        return s, "prismatic", {**info, "_tree": tree}, why
+    why["prismatic"] = info
     s, info = lofted_cad(body)
     if s is None and not body.is_watertight or s is None and "more than one piece" in str(info):
         clean = clean_body(body)
