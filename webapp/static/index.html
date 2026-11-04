@@ -223,6 +223,12 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
         <div class="facts" id="pads-facts"></div>
         <div class="examples" id="pads-links"></div>
       </div>
+      <div class="card" id="fixture-card" hidden>
+        <h3>Robot fixture</h3>
+        <p class="muted small">Holds the part where a robot expects it. Stick the printed tag in the recess; the arm's camera finds it and the pick is in fixture.json.</p>
+        <div class="facts" id="fixture-facts"></div>
+        <div class="examples" id="fixture-links"></div>
+      </div>
       <h3>All files</h3>
       <div class="files" id="files"></div>
     </section>
@@ -442,6 +448,13 @@ async function printScreen(id) {
   $("p-dfm").textContent = made.length ? ` ${made.join(", ").replace(/^./, (c) => c.toUpperCase())}.` : "";
   $("files").innerHTML = st.files.map((x) => `<a href="${x.url}" download>${esc(x.label)}<span>${x.name.split(".").pop().toUpperCase()}</span></a>`).join("");
   $("pads-card").hidden = !f["pads.3mf"];
+  $("fixture-card").hidden = !f["fixture.3mf"];
+  if (f["fixture.3mf"]) {
+    const fx = s.fixture || {};
+    $("fixture-facts").innerHTML = fx.grasp_mm ? `<div class="fact"><b>${fx.relief_mm.toFixed(0)} mm</b><span>finger reliefs</span></div><div class="fact"><b>Tag ${fx.tag_id}</b><span>4×4 ArUco, 30 mm</span></div>` : "";
+    $("fixture-links").innerHTML = (COARSE ? "" : `<a class="chip" href="${bambu(f["fixture.3mf"])}">Open in Bambu Studio</a>`) + `<a class="chip" href="${f["fixture.3mf"]}" download>Download 3MF</a>`
+      + (f["tag.pdf"] ? `<a class="chip" href="${f["tag.pdf"]}" download>Tag PDF</a>` : "") + (f["fixture.json"] ? `<a class="chip" href="${f["fixture.json"]}" download>Pick JSON</a>` : "");
+  }
   if (f["pads.3mf"]) {
     const g = s.grasp || {};
     $("pads-facts").innerHTML = g.closed_on_object_mm ? `<div class="fact"><b>${g.closed_on_object_mm.toFixed(0)} mm</b><span>jaws closed on it</span></div><div class="fact"><b>2 pads</b><span>PLA or TPU</span></div>` : "";

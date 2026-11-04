@@ -125,6 +125,13 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
         summary["grasp"] = {k: grasp[k] for k in ("centre_mm", "squeeze_axis", "closed_on_object_mm")}
     except Exception as e:
         summary["pads_error"] = f"{type(e).__name__}: {e}"
+    # A fixture a robot can work from: gripper reliefs, a tag tab and the pick in the tag's frame.
+    try:
+        from .fixture import write_fixture
+        fx = write_fixture(out_dir, final)
+        summary["fixture"] = {"tag_id": fx["tag"]["id"], "grasp_mm": fx["grasp"]["centre_mm"], "relief_mm": fx["fixture"]["relief_mm"]}
+    except Exception as e:
+        summary["fixture_error"] = f"{type(e).__name__}: {e}"
     timings["total"] = round(time.time() - t0, 1)
     summary["timings_s"] = timings
     progress("done", "ready")
