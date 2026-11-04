@@ -736,7 +736,11 @@ const FILE_GROUPS = [
   ["Robot fixture and pads", { "fixture.3mf": "Fixture", "fixture.step": "Fixture", "tag.pdf": "Tag", "fixture.json": "Pick", "pads.3mf": "Pads", "pad_fixed_jaw.stl": "Fixed pad", "pad_moving_jaw.stl": "Moving pad", "grasp.json": "Grasp" }],
   ["Stick-on grippers", { "tool_fingers.3mf": "Grippers", "tool_fingers.step": "Grippers", "tool_fingers.stl": "Grippers", "tool_fingers.json": "Fit" }],
 ];
-function fileGroups(files, s) {
+// A gripper result offers the two new parts and the scissors' model, nothing else.
+const GRIPPER_FILES = new Set(["custom_jaws.3mf", "custom_moving_jaw.stl", "custom_wrist_roll_follower.stl", "model.step", "model.stl", "model_cad.stl"]);
+const isGripper = (st, s) => st.mode === "gripper" || !!(s && s.custom_jaws);
+function fileGroups(files, s, only) {
+  if (only) files = files.filter((x) => only.has(x.name));
   const by = Object.fromEntries(files.map((x) => [x.name, x])), used = new Set(), ext = (n) => n.split(".").pop().toUpperCase();
   const chip = (x, label) => `<a href="${x.url}" download title="${esc(x.label)}">${esc(label)}<i>${ext(x.name)}</i></a>`;
   let first = true;
@@ -747,7 +751,7 @@ function fileGroups(files, s) {
     const open = first ? " open" : ""; first = false;
     return `<details${open}><summary>${title} <span>${here.length} file${here.length > 1 ? "s" : ""}</span></summary><div class="chips">${here.map((n) => chip(by[n], names[n])).join("")}</div></details>`;
   }).join("");
-  const rest = files.filter((x) => !used.has(x.name));
+  const rest = only ? [] : files.filter((x) => !used.has(x.name));
   return groups + (rest.length ? `<details><summary>Technical files <span>${rest.length}</span></summary><div class="chips">${rest.map((x) => chip(x, x.label.replace(/,\s*\w+$/, ""))).join("")}</div></details>` : "");
 }
 
@@ -773,9 +777,11 @@ async function resultScreen(id) {
   const anim = s.custom_jaws && f["custom_jaws_moving_part.stl"] ? { fixedPart: f["custom_jaws_fixed_part.stl"], movingPart: f["custom_jaws_moving_part.stl"],
     fixedBlade: f["custom_jaws_fixed_blade.stl"], movingBlade: f["custom_jaws_moving_blade.stl"], hinge: s.custom_jaws.hinge_mm, axis: s.custom_jaws.hinge_axis,
     open: (s.custom_jaws.sim.gripper_max_deg * Math.PI) / 180 } : null;
-  viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"],
-    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["custom_jaws_scissors.stl"], anim, st.photo);
-  agentCard(id, st);
+  const gripper = isGripper(st, s);
+  viewer(f["model_cad.stl"] || f["model.stl"], gripper ? null : f["holder.stl"], s.holder?.floor_mm ?? 2, gripper ? null : f["agent_model.stl"],
+    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], gripper || !!s.tool_fingers, f["custom_jaws_scissors.stl"], anim, st.photo);
+  $("agent-card").hidden = gripper;
+  if (gripper) clearTimeout(agentPoll); else agentCard(id, st);
 }
 function fingersCard(st, s, f) {
   const card = $("fingers-card"), tf = s.tool_fingers, cj = s.custom_jaws;
@@ -791,7 +797,7 @@ function fingersCard(st, s, f) {
       <li>Close the gripper, close the scissors and press each loop into its clip.</li>
       <li>Open the gripper and the blades open with it, degree for degree.</li></ol>
       <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["custom_jaws.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["custom_jaws.3mf"]}" download>Both parts, 3MF</a>
-      <a class="chip" href="${f["custom_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["custom_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a>${f["custom_jaws_sim.xml"] ? `<a class="chip" href="${f["custom_jaws_sim.xml"]}" download>MuJoCo model</a>` : ""}</div>`;
+      <a class="chip" href="${f["custom_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["custom_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a></div>`;
     card.hidden = false;
     return;
   }
@@ -858,7 +864,9 @@ async function printScreen(id) {
   const d = h.dfm || {}, has = (k) => typeof d[k] === "number";
   const made = [has("top_fillet_mm") && "rounded rim", has("lead_in_chamfer_mm") && "lead-in", has("foot_chamfer_mm") && "chamfered foot"].filter(Boolean);
   $("p-dfm").textContent = made.length ? ` ${made.join(", ").replace(/^./, (c) => c.toUpperCase())}.` : "";
-  $("files").innerHTML = fileGroups(st.files, s);
+  const gripper = isGripper(st, s);
+  $("files").innerHTML = fileGroups(st.files, s, gripper ? GRIPPER_FILES : null);
+  document.querySelector('[data-screen="print"] > h3').textContent = gripper ? "Files" : "All files";
   $("tool-card").hidden = !f["tool_fingers.3mf"];
   if (f["tool_fingers.3mf"]) {
     const tf = s.tool_fingers || {};
@@ -882,9 +890,10 @@ async function printScreen(id) {
   // A custom-gripper result prints the two new jaw parts: they lead, and the holder card and the
   // stick-on grippers step aside (still under All files).
   const jaws = !!f["custom_jaws.3mf"];
-  $("p-title").textContent = jaws ? "Print the custom grippers" : "Print the holder";
-  document.querySelector('[data-screen="print"] > .card:first-of-type').hidden = jaws || !f["holder.3mf"];
-  if (jaws) $("tool-card").hidden = true;
+  $("p-title").textContent = jaws ? "Print the custom grippers" : gripper ? "Your scissors' files" : "Print the holder";
+  document.querySelector('[data-screen="print"] > .card:first-of-type').hidden = jaws || gripper || !f["holder.3mf"];
+  if (jaws || gripper) { $("tool-card").hidden = true; $("pads-card").hidden = true; $("fixture-card").hidden = true; }
+  if (gripper && !jaws) { actions(link("Download STEP", "primary", f["model.step"] || f["model.stl"] || "#", true)); return; }
   const threemf = jaws ? f["custom_jaws.3mf"] : (f["holder.3mf"] || "#");
   actions(...(COARSE ? [link(jaws ? "Save both parts (3MF)" : "Save the 3MF", "primary", threemf, true)]
     : [link("Open in Bambu Studio", "primary", bambu(threemf)), link(jaws ? "Download both parts (3MF)" : "Download 3MF", "ghost", threemf, true)]));
