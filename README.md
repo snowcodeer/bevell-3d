@@ -69,7 +69,9 @@ export MODEL_API_KEY=...   # Meta Model API
 .venv/bin/uvicorn webapp.server:app --port 8300
 ```
 
-Then open http://localhost:8300 on a phone or a laptop. `python -m bevell3d.run --out out/x
+Then open http://localhost:8300 on a phone or a laptop. A deployed copy runs at
+https://nataliechan1963--bevell-3d-web.us-east.modal.run (`modal_app/web.py`); running a scan
+there needs a passcode, and the examples are open to anyone. `python -m bevell3d.run --out out/x
 photos/*.jpg` runs the same pipeline from the command line.
 
 To build a feature tree inside Fusion 360, start the BevellBridge add-in
@@ -80,4 +82,5 @@ To build a feature tree inside Fusion 360, start the BevellBridge add-in
 - Benchmark objects: [Google Scanned Objects](https://research.google/blog/scanned-objects-by-google-research-a-dataset-of-3d-scanned-common-household-items/),
   CC BY 4.0, via Gazebo Fuel's GoogleResearch collection.
 - SAM 3D Objects and SAM 3.1 by Meta.
-- MIT licence.
+- MIT licence for the code. The Bevell name, logo and wordmark (`webapp/static/logo-icon.svg`,
+  `webapp/static/bevell-wordmark.svg`) are Bevell's trademarks and are not covered by it.
