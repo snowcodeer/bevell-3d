@@ -89,6 +89,7 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 .seg { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; background: rgb(20 22 26 / .85); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
 .seg button { flex: 1; font: 600 13px var(--body); color: var(--muted); background: none; border: 0; padding: 9px 6px; border-radius: 9px; cursor: pointer; }
 .seg button.on { background: var(--accent); color: #fff; }
+#orig { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 18px; background: #16181d; }
 .hint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .fact { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
@@ -126,6 +127,44 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 [hidden] { display: none !important; }
 .tool-entry .get { align-items: start; }
 .tool-entry .ic { font-size: 18px; }
+/* The start screen fits one phone screen, Safari's bars included: it tightens as the screen gets shorter. */
+.start { gap: 14px; }
+.start .hero { display: grid; gap: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.tile .ic { width: 32px; height: 32px; border-radius: 10px; background: rgb(57 90 246 / .14); display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--accent-pale); }
+.tile b { font-size: 13px; line-height: 1.3; font-weight: 600; }
+.start .tool-entry { padding: 14px; }
+.start .tool-entry .btn { min-height: 46px; }
+.exlink { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; font-size: 14px; color: var(--accent-light); text-decoration: none; padding: 4px 0; }
+.exlink:hover { text-decoration: underline; }
+.exlink:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; border-radius: 6px; }
+/* The link and credit sit just above the action bar; any spare height goes above them. */
+main:has(> .start.on) { display: grid; padding-bottom: 8px; }
+.start.on { grid-template-rows: auto auto auto 1fr; }
+.startfoot { align-self: end; display: grid; gap: 2px; }
+@media (max-height: 720px) {
+  .start { gap: 10px; }
+  .start h1 { font-size: 26px; }
+  .start .lede { font-size: 14.5px; }
+  .tile { padding: 8px; gap: 4px; } .tile .ic { width: 26px; height: 26px; font-size: 12px; } .tile b { font-size: 12px; }
+  .start .tool-entry { padding: 12px; gap: 8px; } .start .tool-entry .btn { min-height: 42px; font-size: 15px; }
+  .start .tool-entry .get { grid-template-columns: 34px 1fr; gap: 10px; } .start .tool-entry .get .ic { width: 34px; height: 34px; border-radius: 10px; }
+  .startfoot .small { font-size: 12px; }
+  .actions { padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .actions .btn { min-height: 48px; }
+}
+@media (max-height: 600px) {
+  .start h1 { font-size: 24px; } .start h1 br { display: none; }
+  .start .lede { font-size: 14px; line-height: 1.4; }
+  .start .tool-entry b { font-size: 14px; } .start .tool-entry .small { font-size: 12.5px; }
+}
+.exgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.excard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; text-decoration: none; color: var(--fg); display: grid; min-width: 0; }
+.excard:hover { border-color: var(--accent); }
+.excard:focus-visible { outline: 2px solid var(--accent-light); outline-offset: 2px; }
+.excard img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--card-2); }
+.excard b { font-size: 14px; font-weight: 600; padding: 10px 12px; }
 .steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
 /* Guided camera: the live view with the sheet's outline for each angle, as identity checks guide a photo. */
 body.camopen { overflow: hidden; }
@@ -185,20 +224,30 @@ body.camopen { overflow: hidden; }
   </header>
 
   <main>
-    <section class="screen" data-screen="start">
-      <h1>Photos in.<br>CAD out.</h1>
-      <p class="lede">Outputs a true-to-scale model and a holder to print.</p>
-      <div class="card gets">
-        <div class="get"><span class="ic">mm</span><b>Measured, not guessed</b></div>
-        <div class="get"><span class="ic">3D</span><b>STEP and STL</b></div>
-        <div class="get"><span class="ic">▣</span><b>Holder, straight to Bambu Studio</b></div>
+    <section class="screen start" data-screen="start">
+      <div class="hero">
+        <h1>Photos in.<br> CAD out.</h1>
+        <p class="lede">Outputs a true-to-scale model and a holder to print.</p>
+      </div>
+      <div class="tiles">
+        <div class="tile"><span class="ic">mm</span><b>Measured, not guessed</b></div>
+        <div class="tile"><span class="ic">3D</span><b>STEP and STL</b></div>
+        <div class="tile"><span class="ic">▣</span><b>Holder for Bambu Studio</b></div>
       </div>
       <div class="card tool-entry">
         <div class="get"><span class="ic">✂︎</span><div><b>Custom robot grippers for a tool</b><p class="muted small">Works with scissors for now, on the SO-101.</p></div></div>
         <button class="btn ghost" id="tool-start">Make custom robot grippers</button>
       </div>
-      <div class="card"><h3>Examples</h3><div class="examples" id="examples"></div></div>
-      <p class="muted small">Powered by Muse Spark, SAM 3.1 and SAM 3D.</p>
+      <div class="startfoot">
+        <a class="exlink" href="#examples">See examples <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9.5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <p class="muted small">Powered by Muse Spark, SAM 3.1 and SAM 3D.</p>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="examples">
+      <h2>Examples</h2>
+      <p class="lede">Finished scans. Open one to turn it round and take the files.</p>
+      <div class="exgrid" id="example-list"></div>
     </section>
 
     <section class="screen" data-screen="sheet">
@@ -261,7 +310,8 @@ body.camopen { overflow: hidden; }
       <h2 id="r-title">Your model is ready</h2>
       <div class="viewer-wrap">
         <canvas id="viewer"></canvas>
-        <div class="seg" role="group" aria-label="What to show"><button data-show="model" class="on">Model</button><button data-show="fingers" hidden>Fingers</button><button data-show="agent" hidden>Editable</button><button data-show="holder">Holder</button><button data-show="both">In holder</button></div>
+        <img id="orig" alt="The object as photographed" hidden>
+        <div class="seg" role="group" aria-label="What to show"><button data-show="model" class="on">Model</button><button data-show="photo" hidden>Original</button><button data-show="fingers" hidden>Grippers</button><button data-show="agent" hidden>Editable</button><button data-show="holder">Holder</button><button data-show="both">In holder</button></div>
         <span class="hint">Drag to turn · pinch to zoom</span>
       </div>
       <div class="facts" id="facts"></div>
@@ -335,8 +385,9 @@ const COARSE = matchMedia("(pointer: coarse)").matches;
 // fetched the file); bambustudio://open?file= is its Windows form.
 const bambu = (url) => /Mac/i.test(navigator.platform || navigator.userAgent)
   ? "bambustudioopen://" + encodeURIComponent(url) : "bambustudio://open?file=" + encodeURIComponent(url);
-const ORDER = ["start", "sheet", "place", "shoot", "review", "making", "result", "print"];
-const NAMES = { start: "", sheet: "1 / 5", place: "2 / 5", shoot: "3 / 5", review: "4 / 5", making: "5 / 5", result: "", print: "" };
+const ORDER = ["start", "sheet", "place", "shoot", "review", "making", "result", "print", "examples"];
+const NAMES = { start: "", sheet: "1 / 5", place: "2 / 5", shoot: "3 / 5", review: "4 / 5", making: "5 / 5", result: "", print: "", examples: "" };
+const STEPS = ORDER.filter((n) => n !== "examples");   // what the progress bar counts
 let files = [], scan = null;
 
 // ---------- navigation: #screen or #screen/scan-id, so the phone's back gesture works ----------
@@ -348,11 +399,11 @@ function show() {
   if (name !== "shoot" && !$("camview").hidden) closeCamera(false);   // the back gesture leaves the camera too
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.dataset.screen === name));
   $("stepname").textContent = NAMES[name];
-  $("bar").style.width = `${Math.round((ORDER.indexOf(name) / (ORDER.length - 1)) * 100)}%`;
+  $("bar").style.width = `${Math.round((Math.max(0, STEPS.indexOf(name)) / (STEPS.length - 1)) * 100)}%`;
   $("back").hidden = name === "start";
   window.scrollTo(0, 0);
   ({ start: startScreen, sheet: sheetScreen, place: placeScreen, shoot: shootScreen, review: reviewScreen,
-     making: () => makingScreen(id), result: () => resultScreen(id), print: () => printScreen(id) })[name]();
+     making: () => makingScreen(id), result: () => resultScreen(id), print: () => printScreen(id), examples: examplesScreen })[name]();
 }
 addEventListener("hashchange", show);
 $("back").onclick = () => history.back();
@@ -366,13 +417,17 @@ function link(label, kind, href, download) {
 
 // ---------- start, sheet, set up ----------
 let mode = "scan";                       // "gripper": custom robot grippers for a tool
-async function startScreen() {
+function startScreen() {
   actions(button("Start a scan", "primary", () => { mode = "scan"; files = []; go("sheet"); }));
   $("tool-start").onclick = () => { mode = "gripper"; files = []; go("sheet"); };
+}
+async function examplesScreen() {
+  actions(button("Start a scan", "primary", () => { mode = "scan"; files = []; go("sheet"); }));
   try {
     const ex = await (await fetch("/api/examples")).json();
-    $("examples").innerHTML = ex.length ? ex.map((e) => `<a class="chip" href="#result/${e.id}">${esc(e.name)}</a>`).join("") : `<span class="muted small">No examples yet.</span>`;
-  } catch { $("examples").innerHTML = ""; }
+    $("example-list").innerHTML = ex.length ? ex.map((e) => `<a class="excard" href="#result/${e.id}"><img alt="" loading="lazy" src="/api/scans/${e.id}/photo" onerror="this.remove()"><b>${esc(e.name)}</b></a>`).join("")
+      : `<span class="muted small">No examples yet.</span>`;
+  } catch { $("example-list").innerHTML = `<span class="muted small">Could not load the examples. Try again.</span>`; }
 }
 function sheetScreen() {
   const boxes = [...document.querySelectorAll(".sheetchk")], ready = () => boxes.every((b) => b.checked);
@@ -687,7 +742,7 @@ async function resultScreen(id) {
     fixedBlade: f["custom_jaws_fixed_blade.stl"], movingBlade: f["custom_jaws_moving_blade.stl"], hinge: s.custom_jaws.hinge_mm, axis: s.custom_jaws.hinge_axis,
     open: (s.custom_jaws.sim.gripper_max_deg * Math.PI) / 180 } : null;
   viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"],
-    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["custom_jaws_scissors.stl"], anim);
+    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["custom_jaws_scissors.stl"], anim, st.photo);
   agentCard(id, st);
 }
 function fingersCard(st, s, f) {
@@ -800,7 +855,7 @@ async function printScreen(id) {
 
 // ---------- 3D viewer ----------
 let three;
-async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersFirst, toolUrl, anim) {
+async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersFirst, toolUrl, anim, photoUrl) {
   const canvas = $("viewer");
   if (!three) {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -833,8 +888,14 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
   document.querySelector('.seg [data-show="fingers"]').hidden = !(fingers || moving);
   document.querySelector('.seg [data-show="holder"]').hidden = !holder;
   document.querySelector('.seg [data-show="both"]').hidden = !holder;
+  const orig = $("orig"), photoTab = document.querySelector('.seg [data-show="photo"]');
+  photoTab.hidden = !photoUrl; orig.hidden = true;
+  if (photoUrl) { orig.src = photoUrl; orig.onerror = () => { photoTab.hidden = true; orig.hidden = true; }; }
   const seated = model.clone(); seated.position.z = floor - model.geometry.boundingBox.min.z;
   const showIt = (what) => {
+    orig.hidden = what !== "photo";
+    document.querySelector(".viewer-wrap .hint").hidden = what === "photo";
+    if (what === "photo") { document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("on", b.dataset.show === what)); return; }
     three.group.clear();
     if (what === "model") three.group.add(model);
     if (what === "agent" && agent) three.group.add(agent);
