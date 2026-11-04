@@ -276,12 +276,29 @@ def prismatic_levels(body, step_mm=1.0, change=0.06, max_levels=4):
         return None, "no level is tall enough"
     if len(levels) > max_levels:
         return None, f"{len(levels)} levels; a prismatic part has at most {max_levels}"
-    out = []
-    for k, (a, b) in enumerate(levels):
-        za = z0 if k == 0 else (zs[levels[k - 1][1] - 1] + zs[a]) / 2
-        zb = z1 if k == len(levels) - 1 else (zs[b - 1] + zs[levels[k + 1][0]]) / 2
-        out.append((za, zb, slices[(a + b) // 2].simplify(0.25)))
-    return out, None
+    shapes = [slices[(a + b) // 2] for a, b in levels]
+    cuts = [_level_boundary(body, zs[levels[k][1] - 1], zs[levels[k + 1][0]], shapes[k], shapes[k + 1])
+            for k in range(len(levels) - 1)]
+    edges = [z0] + cuts + [z1]
+    return [(edges[k], edges[k + 1], shapes[k].simplify(0.25)) for k in range(len(levels))], None
+
+
+def _level_boundary(body, lo, hi, below, above, tol=0.05):
+    """Where one level becomes the next, between the last slice of the one and the first of the
+    other: the height at which a section stops looking like the level below, found by halving
+    the gap to `tol` mm. The slices alone put it half a slice out (26.0 for a step at 26.5)."""
+    from shapely.ops import unary_union
+    while hi - lo > tol:
+        z = (lo + hi) / 2
+        sec = body.section(plane_origin=(0, 0, z), plane_normal=(0, 0, 1))
+        if sec is None:
+            break
+        g = unary_union(sec.to_planar(to_2D=np.eye(4))[0].polygons_full).buffer(0)
+        if g.symmetric_difference(below).area <= g.symmetric_difference(above).area:
+            lo = z
+        else:
+            hi = z
+    return (lo + hi) / 2
 
 
 def prismatic_cad(body, max_off=0.10):

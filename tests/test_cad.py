@@ -77,3 +77,23 @@ def test_a_stepped_bracket_becomes_stacked_extrusions_and_a_sloped_stand_does_no
     assert {q["name"] for q in tree["parameters"]} == {"level1_h", "level2_h", "hole1_d", "hole2_d", "hole3_d"}
     solid, why, tree = prismatic_cad(mesh_of(wedge_stand))
     assert solid is None and "levels" in why, why
+
+
+def test_a_servo_keeps_its_ear_height_between_slices():
+    """The ears start at 26.5 mm, half way between two 1 mm slices: the boundary is found by
+    halving the gap, not put at the slices' midpoint (which gave 26.0)."""
+    import numpy as np
+    from bevell3d.cad import prismatic_cad
+    from bevell3d.feature_tree import to_cadquery, validate
+    from tools.make_parts import servo
+
+    s = servo().val(); vs, fs = s.tessellate(0.02, 0.1)
+    m = trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs)); m.apply_translation(-m.bounds[0])
+    solid, info, tree = prismatic_cad(m)
+    assert info["levels"] == 4 and info["holes"] == 4, info
+    assert np.allclose(info["level_heights_mm"], [26.5, 2.5, 8.0, 5.0], atol=0.06), info
+    validate(tree)
+    rebuilt, _ = to_cadquery(tree, {q["name"]: q["value"] for q in tree["parameters"]})
+    assert abs(rebuilt.Volume() / m.volume - 1) < 0.005
+    holes = [q["value"] for q in tree["parameters"] if q["name"].startswith("hole")]
+    assert len(holes) == 4 and all(abs(d - 4.4) < 0.1 for d in holes), holes
