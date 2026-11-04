@@ -145,6 +145,17 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
             tf = write_tool_fingers(out_dir, final, outline=outline)
             summary["tool_fingers"] = {"jaw_gap_mm": tf["jaw_gap_tool_closed_mm"], "grip_mm": [s["width_mm"] for s in tf["saddles"]],
                                        "loops": all(s["loop"] for s in tf["saddles"]), "outline_from": tf["outline_from"]}
+            # Scissors: new SO-101 jaw parts with the loops' clips built in, the scissors' pivot on
+            # the gripper's hinge, tested in MuJoCo.
+            if summary["tool_fingers"]["loops"]:
+                try:
+                    from .custom_jaws import write as write_jaws, simulate as simulate_jaws
+                    cj = write_jaws(out_dir, log=log)
+                    sim = simulate_jaws(out_dir)
+                    summary["custom_jaws"] = {"collisions_mm3": cj["collisions_mm3"], "arm_mm": cj["arm_mm"], "side": cj["side"],
+                                              "parts": cj["parts"], "clips": cj["clips"], "sim": sim}
+                except Exception as e:
+                    summary["custom_jaws_error"] = f"{type(e).__name__}: {e}"
             # Scissors: the SO-101 working them in MuJoCo sets the gripper's range and the rail the
             # moving jaw's loop slides along (the jaw's arc and the loop's arc differ).
             if summary["tool_fingers"]["loops"]:

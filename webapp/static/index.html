@@ -183,8 +183,8 @@ body.camopen { overflow: hidden; }
         <div class="get"><span class="ic">▣</span><b>Holder, straight to Bambu Studio</b></div>
       </div>
       <div class="card tool-entry">
-        <div class="get"><span class="ic">✂︎</span><div><b>Robot fingers for a tool</b><p class="muted small">Scissors or pliers in, two gripper fingers out: the SO-101 holds the tool and works it.</p></div></div>
-        <button class="btn ghost" id="tool-start">Make robot fingers</button>
+        <div class="get"><span class="ic">✂︎</span><div><b>Custom robot grippers for a tool <span class="badge">Beta · SO-101</span></b><p class="muted small">Scissors in, new SO-101 jaw parts out, with the scissors built in: the gripper opens and closes them. Tested in simulation.</p></div></div>
+        <button class="btn ghost" id="tool-start">Make custom robot grippers</button>
       </div>
       <div class="card"><h3>Examples</h3><div class="examples" id="examples"></div></div>
       <p class="muted small">Powered by Muse Spark, SAM 3.1 and SAM 3D.</p>
@@ -267,7 +267,7 @@ body.camopen { overflow: hidden; }
         <p class="muted small">PLA, no supports.<span id="p-dfm"></span><span class="phone-only"> Open this link on your computer to send it to Bambu Studio.</span></p>
       </div>
       <div class="card" id="tool-card" hidden>
-        <h3>Robot fingers for this tool</h3>
+        <h3>Custom robot grippers for this tool</h3>
         <p class="muted small">Two saddles shaped to the tool's handles. Tape one inside each SO-101 jaw near the tip, set the gripper to the jaw gap below, and zip-tie each handle in through the notches (through the finger loop on scissors). The gripper's own close and open now close and open the tool.</p>
         <div class="facts" id="tool-facts"></div>
         <div class="examples" id="tool-links"></div>
@@ -353,7 +353,7 @@ function link(label, kind, href, download) {
 }
 
 // ---------- start, sheet, set up ----------
-let mode = "scan";                       // "gripper": robot fingers for a tool
+let mode = "scan";                       // "gripper": custom robot grippers for a tool
 async function startScreen() {
   actions(button("Start a scan", "primary", () => { mode = "scan"; files = []; go("sheet"); }));
   $("tool-start").onclick = () => { mode = "gripper"; files = []; go("sheet"); };
@@ -429,25 +429,38 @@ function onTilt(e) {
   tiltDown = Math.asin(Math.max(-1, Math.min(1, Math.cos(e.beta * r) * Math.cos(e.gamma * r)))) / r;
   drawTilt();
 }
-function sheetQuad(ring, W, H) {
-  // Where the A4 sheet should sit in the frame from this ring: wide and near at the bottom.
-  const w = Math.min(W * 0.9, H * 1.3), cx = W / 2, cy = H * 0.55;
-  const [top, depth] = ring.startsWith("45") ? [0.72, 0.42] : ring.startsWith("LOW") ? [0.8, 0.13] : [1, 0.707];
-  const h = w * depth, hw = w / 2, ht = (w * top) / 2;
-  return [[cx - ht, cy - h / 2], [cx + ht, cy - h / 2], [cx + hw, cy + h / 2], [cx - hw, cy + h / 2]];
+// The A4 sheet (mm, landscape, as the map draws it) seen from this shot's own position: the
+// shot's height on its ring and its direction round the sheet, through a pinhole camera aimed at
+// the middle, then scaled to fill the frame. Each of the 16 shots gets its own outline.
+const RING_ELEV = { "45° UP": 45, "LOW, NEAR THE TABLE": 12, "FROM ABOVE": 78 };
+function sheetView(shot, W, H) {
+  const el = (RING_ELEV[shot.ring] * Math.PI) / 180, az = (shot.a * Math.PI) / 180, R = 420;
+  const C = [R * Math.cos(el) * Math.cos(az), R * Math.cos(el) * Math.sin(az), R * Math.sin(el)];
+  const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]], dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const cross = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const unit = (p) => { const n = Math.hypot(...p); return p.map((c) => c / n); };
+  const f = unit(sub([0, 0, 0], C)), r = unit(cross(f, [0, 0, 1])), u = cross(r, f);
+  const proj = (P) => { const d = sub(P, C), z = dot(d, f); return [dot(d, r) / z, -dot(d, u) / z]; };
+  const corners = [[-148.5, 105, 0], [148.5, 105, 0], [148.5, -105, 0], [-148.5, -105, 0]].map(proj);
+  const obj = proj([0, 0, 18]);
+  // Fit: the sheet fills the frame's width (or 60% of its height), centred a little low.
+  const xs = corners.map((p) => p[0]), ys = corners.map((p) => p[1]);
+  const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
+  const k = Math.min((W * 0.9) / bw, (H * 0.6) / bh), mx = (Math.max(...xs) + Math.min(...xs)) / 2, my = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const place = (p) => [W / 2 + (p[0] - mx) * k, H * 0.55 + (p[1] - my) * k];
+  return { quad: corners.map(place), obj: place(obj), scale: k };
 }
 function drawGuide() {
   const n = files.length, shot = SHOTS[Math.min(n, SHOTS.length - 1)], v = $("camview"), W = v.clientWidth, H = v.clientHeight;
-  const q = sheetQuad(shot.ring, W, H), f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
+  const view = sheetView(shot, W, H), q = view.quad, f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
   const quad = `M${q.map(f).join(" L")} Z`;
-  const c = [(q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4];
+  const c = view.obj;
   // Corner brackets: a short stroke along each edge from every corner.
   const L = Math.min(W, H) * 0.06, br = q.map((p, i) => {
     const a = q[(i + 1) % 4], b = q[(i + 3) % 4], u = (o) => { const d = Math.hypot(o[0] - p[0], o[1] - p[1]) || 1; return [p[0] + ((o[0] - p[0]) / d) * L, p[1] + ((o[1] - p[1]) / d) * L]; };
     return `<path class="g" d="M${f(u(a))} L${f(p)} L${f(u(b))}" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
   }).join("");
-  const ow = Math.max(22, Math.abs(q[2][0] - q[3][0]) * 0.12);
-  const oh = shot.ring === "FROM ABOVE" ? ow * 0.75 : Math.max(16, Math.abs(q[2][1] - q[1][1]) * 0.45, ow * 0.7);
+  const ow = Math.max(22, view.scale * 0.045), oh = Math.max(16, shot.ring === "FROM ABOVE" ? ow * 0.75 : ow * 0.8);
   const ov = $("cv-overlay"); ov.setAttribute("viewBox", `0 0 ${W} ${H}`);
   ov.innerHTML = `<path d="M0 0H${W}V${H}H0Z ${quad}" fill="rgb(0 0 0 / .42)" fill-rule="evenodd"/>`
     + `<path class="g" d="${quad}" fill="none" stroke-width="1.6" stroke-dasharray="7 7" opacity=".85"/>${br}`
@@ -599,17 +612,33 @@ async function resultScreen(id) {
   $("r-plan").innerHTML = planHTML(s.plan);
   const T = s.timings_s || {}, L = { plan: "Muse Spark", photos: "photos", markers: "squares", masks: "SAM 3.1", hull: "shape", revolve: "profile", sam3d: "SAM 3D", fit: "fit", cad_and_holder: "CAD + holder", total: "total" };
   $("times").innerHTML = Object.entries(T).map(([k, v]) => `<span>${L[k] || k} ${v.toFixed(0)} s</span>`).join("");
-  actions(button(s.tool_fingers ? "Print the tool fingers" : "Print the holder", "primary", () => go("print", id)), button("New scan", "ghost", () => { files = []; go("sheet"); }));
+  actions(button(s.custom_jaws || s.tool_fingers ? "Print the custom grippers" : "Print the holder", "primary", () => go("print", id)), button("New scan", "ghost", () => { files = []; go("sheet"); }));
   const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
   fingersCard(st, s, f);
-  viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"], f["tool_fingers_on_tool.stl"], !!s.tool_fingers);
+  viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"],
+    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["custom_jaws_scissors.stl"]);
   agentCard(id, st);
 }
 function fingersCard(st, s, f) {
-  const card = $("fingers-card"), tf = s.tool_fingers;
+  const card = $("fingers-card"), tf = s.tool_fingers, cj = s.custom_jaws;
+  if (cj) {
+    $("r-title").textContent = `Custom robot grippers for your ${s.plan.object}`;
+    const clear = Object.values(cj.collisions_mm3).every((v) => v < 1);
+    card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> The scissors' pivot on the gripper hinge</div>
+      <div class="facts"><div class="fact"><b>${cj.sim.gripper_max_deg.toFixed(0)}° → ${cj.sim.blades_max_deg.toFixed(0)}°</b><span>gripper to blades, tested in MuJoCo</span></div>
+      <div class="fact"><b>${clear ? "Clear" : "Check"}</b><span>${clear ? "no collisions over the stroke" : "parts touch over the stroke"}</span></div></div>
+      <ol class="steps"><li>Print the new moving jaw and wrist-roll follower (as you printed the originals).</li>
+      <li>Swap them in for the SO-101's own: same screws, same servo horn.</li>
+      <li>Snap each finger loop into its clip, scissors closed with the gripper closed.</li>
+      <li>Open the gripper and the blades open with it, degree for degree.</li></ol>
+      <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["custom_jaws.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["custom_jaws.3mf"]}" download>Both parts, 3MF</a>
+      <a class="chip" href="${f["custom_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["custom_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a>${f["custom_jaws_sim.xml"] ? `<a class="chip" href="${f["custom_jaws_sim.xml"]}" download>MuJoCo model</a>` : ""}</div>`;
+    card.hidden = false;
+    return;
+  }
   if (tf) {
-    $("r-title").textContent = `Robot fingers for your ${s.plan.object}`;
-    card.innerHTML = `<div class="small muted">SO-101 · ${tf.loops ? "through the finger loops" : "round the handles"}</div>
+    $("r-title").textContent = `Custom robot grippers for your ${s.plan.object}`;
+    card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> ${tf.loops ? "Through the finger loops" : "Round the handles"}</div>
       <div class="facts"><div class="fact"><b>${tf.jaw_gap_mm.toFixed(1)} mm</b><span>jaw gap, tool closed</span></div>
       <div class="fact"><b>${tf.grip_mm.map((w) => w.toFixed(1)).join(" + ")} mm</b><span>${tf.loops ? "loop rings" : "handles"} gripped</span></div></div>
       ${tf.sim ? `<div class="facts"><div class="fact"><b>${(tf.sim.gripper_open_rad[0] * 57.2958).toFixed(0)}° → ${(tf.sim.gripper_open_rad[1] * 57.2958).toFixed(0)}°</b><span>gripper, closed to open</span></div>
@@ -693,7 +722,7 @@ async function printScreen(id) {
 
 // ---------- 3D viewer ----------
 let three;
-async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersFirst) {
+async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersFirst, toolUrl) {
   const canvas = $("viewer");
   if (!three) {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -708,7 +737,7 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
     (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
   }
   const get = (url, color, rough = 0.55) => new Promise((res) => url ? new STLLoader().load(url, (g) => { g = toCreasedNormals(g, Math.PI / 6); g.computeBoundingBox(); res(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05 }))); }) : res(null));
-  const [model, holder, agent, fingers] = await Promise.all([get(modelUrl, 0x395af6), get(holderUrl, 0xe6e6ea, 0.7), get(agentUrl, 0x8f74d6), get(fingersUrl, 0xf0a030, 0.6)]);
+  const [model, holder, agent, fingers, tool] = await Promise.all([get(modelUrl, 0x395af6), get(holderUrl, 0xe6e6ea, 0.7), get(agentUrl, 0x8f74d6), get(fingersUrl, 0xf0c020, 0.6), get(toolUrl, 0x395af6)]);
   document.querySelector('.seg [data-show="agent"]').hidden = !agent;
   document.querySelector('.seg [data-show="fingers"]').hidden = !fingers;
   const seated = model.clone(); seated.position.z = floor - model.geometry.boundingBox.min.z;
@@ -716,7 +745,7 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
     three.group.clear();
     if (what === "model") three.group.add(model);
     if (what === "agent" && agent) three.group.add(agent);
-    if (what === "fingers" && fingers) { three.group.add(model); three.group.add(fingers); }
+    if (what === "fingers" && fingers) { three.group.add(tool || model); three.group.add(fingers); }
     if (what === "holder" && holder) three.group.add(holder);
     if (what === "both") { if (holder) three.group.add(holder); three.group.add(seated); }
     const box = new THREE.Box3().setFromObject(three.group), c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length();

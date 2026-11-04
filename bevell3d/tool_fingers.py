@@ -193,6 +193,7 @@ def tool_fingers(mesh, p=FingerParams(), outline=None, rail=None):
     perp = np.array(info["squeeze_axis"]); ax = np.array(info["long_axis"])
     mid = np.mean([np.array(h["centre_mm"]) for h in info["handles"]], axis=0)
     prints, placed, rep = [], [], []
+    clips = False                               # scissors get snap clips in custom jaws (custom_jaws.py)
     for k, h in enumerate(info["handles"]):
         out_dir = -1 if k == 0 else 1          # handle 0 lies on the -perp side of the line
         h = {**h, "tilt_deg": h["angle_deg"]}
@@ -209,8 +210,8 @@ def tool_fingers(mesh, p=FingerParams(), outline=None, rail=None):
         rep.append({**{k2: h[k2] for k2 in ("width_mm", "thickness_mm", "angle_deg", "centre_mm", "loop")}, "saddle": dims})
     outer = abs(np.diff([(np.array(h["centre_mm"]) - mid) @ perp for h in info["handles"]])[0]) + sum(h["width_mm"] for h in info["handles"]) / 2
     report = {"tool": {k: info[k] for k in ("length_mm", "gap_mm", "long_axis", "squeeze_axis", "grasp_line_mm")},
-              "saddles": rep, "params": asdict(p),
-              "jaw_gap_tool_closed_mm": round(float(outer + 2 * p.back), 1),
+              "kind": "snap clips" if clips else "saddles", "saddles": rep, "params": asdict(p),
+              "jaw_gap_tool_closed_mm": round(float(outer + 2 * (1.6 + 3.0 if clips else p.back)), 1),
               "fit": ["Tape each saddle's flat back to the inside of a jaw, near its tip, the groove facing the other jaw.",
                       "Close the gripper to the jaw gap above, lay the tool's handles in the grooves, and zip-tie each handle to its saddle and jaw through the notches (through the finger loop on scissors).",
                       "Opening the gripper now opens the tool; closing it closes the tool. Teach the cut with the leader arm and replay it."]}
