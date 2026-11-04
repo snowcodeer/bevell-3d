@@ -156,3 +156,38 @@ def shown_model(outline, info, pivot, toward, sam=None, reach=400.0):
     if blades is not None and len(blades.faces):
         parts.append(blades)
     return trimesh.util.concatenate(parts)
+
+
+def smooth_outline(outline, r=0.8, tol=0.08):
+    """The outline without the photos' pixel steps: closed and opened by `r` mm, then simplified.
+    Clips built on the raw trace came out with stepped walls and slivers in the mouth."""
+    s = outline.buffer(r, 32).buffer(-2 * r, 32).buffer(r, 32).simplify(tol)
+    return max(getattr(s, "geoms", [s]), key=lambda g: g.area) if not s.is_empty else outline
+
+
+def tool_halves_cut(outline, info, pivot, toward, cl=0.4, reach=400.0):
+    """Each half of the tool (either side of its long axis) as a solid `cl` mm larger all round,
+    sheet frame: the handle side at that handle's own height and thickness, the blade side over
+    both. Cut from the new parts, nothing of them can stand where the tool is."""
+    from shapely.geometry import box as sbox
+    from shapely import affinity
+    p = np.asarray(pivot, float); a = np.asarray(toward, float) / np.linalg.norm(toward)
+    ang = np.degrees(np.arctan2(a[1], a[0]))
+    def half(x0, x1, y0, y1):
+        return affinity.translate(affinity.rotate(sbox(x0, y0, x1, y1), ang, origin=(0, 0)), p[0], p[1])
+    hs = info["handles"]
+    zlo = min(float(h["z_mm"]) for h in hs); zhi = max(float(h["z_mm"]) + float(h["thickness_mm"]) for h in hs)
+    out = {}
+    for side in (1, -1):
+        ys = (0, reach) if side > 0 else (-reach, 0)
+        cs = [h for h in hs if np.sign(((np.array(h["centre_mm"]) - p) @ np.array([-a[1], a[0]])) or 1) == side]
+        z0 = float(cs[0]["z_mm"]) if cs else zlo; th = float(cs[0]["thickness_mm"]) if cs else zhi - zlo
+        parts = []
+        for region, lo, hi in ((outline.intersection(half(-reach, 0.5, *ys)), z0, z0 + th),
+                               (outline.intersection(half(-0.5, reach, *ys)), zlo, zhi)):
+            g = region.buffer(cl, 16)
+            for piece in getattr(g, "geoms", [g]):
+                if piece.area > 0.5:
+                    m = trimesh.creation.extrude_polygon(piece, hi - lo + 2 * cl); m.apply_translation((0, 0, lo - cl)); parts.append(m)
+        out[side] = trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
+    return out
