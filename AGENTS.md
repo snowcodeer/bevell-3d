@@ -320,6 +320,19 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   sixteen copies of one photo and photos with no sheet are refused with what to do; a broken
   photo is skipped. API tests (`tests/test_webapp.py`, 23) cover the passcode, the cap, photo
   limits, file types, ids and path traversal.
+- **Each scan and agent run is its own spawned process** (`webapp/server.py`, `_in_child`),
+  stopped after 20 and 30 minutes (`BEVELL3D_SCAN_TIMEOUT`, `BEVELL3D_AGENT_TIMEOUT`). Not a
+  daemon: the holder and the agent's builder start processes of their own. Messages our
+  pipeline raises as ValueError reach the person as written; anything else reads "Something
+  went wrong on our side", with `error_detail` kept in status.json.
+- **The robot pick checked against the truth:** `tools/render_fixture_scene.py` renders the
+  fixture, the seated part and the tag from a known camera (from behind the tag: the holder's
+  wall hides a low tag from the far side); read off the render, the pick lands 0.3 to 0.7 mm
+  sideways and 2.6 to 5 mm in depth at 33 cm. Sub-pixel corner refinement halved the depth
+  error. `docs/images/robot_pick.png` is the shot.
+- **Phone layout:** headless Chrome keeps a desktop window at least about 500 px wide, so a
+  `--window-size=390` screenshot crops a wider layout; put the page in a 390 px iframe instead
+  (`docs/images/phone_result_print.png`, 4 Nov: no sideways scroll).
 - **Demo:** `docs/DEMO.md` (script and shots), `docs/SUBMISSION.md` (form answers).
 
 ## Smooth NURBS for freeform scans (4 Nov)

@@ -42,7 +42,7 @@ p { margin: 0; }
 .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent-dark), var(--accent)); transition: width .3s; }
 main { padding: 8px var(--gutter) 24px; }
 .screen { display: none; gap: 18px; animation: in .22s ease-out; }
-.screen.on { display: grid; }
+.screen.on { display: grid; grid-template-columns: minmax(0, 1fr); }   /* never wider than the phone */
 @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .screen { animation: none; } }
 .lede { color: var(--muted); font-size: 16px; }
