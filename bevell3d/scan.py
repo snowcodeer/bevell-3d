@@ -2,7 +2,7 @@
 
     python -m bevell3d.scan --prompt "airpods case" --out out/airpods photos/IMG_*.HEIC
 """
-import argparse, json, os, pickle
+import argparse, json, math, os, pickle
 import numpy as np, cv2
 from . import markers, photos
 from .hull import visual_hull
@@ -10,13 +10,30 @@ from .project import silhouette, iou
 from .sam_client import segment
 
 
-def object_mask(path, prompt):
-    """The most confident SAM 3.1 instance for the prompt, as a full-size boolean mask."""
+def object_mask(path, prompt, min_conf=0.45):
+    """The most confident SAM 3.1 instance for the prompt, joined by any other confident
+    instance that touches it, as a full-size boolean mask.
+
+    SAM 3.1 can return one object as several instances: on the letter holder it gave the red
+    front compartments (0.83) and the dark back one (0.61) apart. Taking the first alone
+    carved the back compartment out of the hull, 26 mm of height, because one photo's mask is
+    enough to remove a part. An instance that does not touch the object (another thing on the
+    sheet) stays out."""
     _, _, recs = segment(path, prompt, max_side=photos.MAX_SIDE)
-    recs = [r for r in recs if "mask" in r]
+    recs = sorted((r for r in recs if "mask" in r), key=lambda r: (r["conf"] or 0, r["mask"].sum()), reverse=True)
     if not recs:
         return None
-    return max(recs, key=lambda r: (r["conf"] or 0, r["mask"].sum()))["mask"]
+    mask = recs[0]["mask"].copy()
+    rest = [r for r in recs[1:] if (r["conf"] or 0) >= min_conf]
+    k = max(3, int(0.01 * min(mask.shape)))
+    grown = True
+    while grown and rest:
+        grown = False
+        near = cv2.dilate(mask.astype(np.uint8), np.ones((2 * k + 1, 2 * k + 1), np.uint8)) > 0
+        for r in list(rest):
+            if (r["mask"] & near).sum() > 0.02 * max(r["mask"].sum(), 1):
+                mask |= r["mask"]; rest.remove(r); grown = True
+    return mask
 
 
 def masks_for(prepared, prompt, cache_path, workers=4):
@@ -32,6 +49,42 @@ def masks_for(prepared, prompt, cache_path, workers=4):
     return {name: cache[(name, prompt)] for name, _ in prepared}
 
 
+def camera_centres(views):
+    out = []
+    for v in views:
+        R, _ = cv2.Rodrigues(v["rv"])
+        out.append((-R.T @ v["tv"]).ravel())
+    return np.array(out)
+
+
+def check_coverage(views, min_spread_deg=25.0):
+    """Refuse a set of photos all taken from about the same place, before asking SAM for masks:
+    sixteen copies of one photo gave a hull 243 mm deep that took minutes to process further."""
+    if len(views) < 3:
+        raise ValueError(f"Only {len(views)} photos show enough of the sheet's squares to place the camera. "
+                         "Keep the whole sheet in view and take at least 8.")
+    from .hull import AREA_LO, AREA_HI
+    d = camera_centres(views) - (AREA_LO + AREA_HI) / 2 * np.array([1, 1, 0])
+    d /= np.linalg.norm(d, axis=1, keepdims=True)
+    spread = math.degrees(math.acos(float(np.clip(np.min(d @ d.T), -1, 1))))
+    if spread < min_spread_deg:
+        raise ValueError(f"The photos were all taken from about the same spot (within {spread:.0f} degrees). "
+                         "Take them from all the way round the object, as the guide shows.")
+
+
+def check_bounded(mesh, margin=3.0):
+    """A shape that reaches the edge of the white area is either not pinned down by the photos
+    or hanging off the sheet; its size would be wrong either way, so say which."""
+    from .hull import AREA_LO, AREA_HI
+    lo, hi = mesh.bounds
+    if hi[2] >= AREA_HI[2] - margin:
+        raise ValueError("The shape isn't pinned down: it runs off the top. Take photos from more sides, "
+                         "including two from above.")
+    if (lo[:2] <= AREA_LO[:2] + margin).any() or (hi[:2] >= AREA_HI[:2] - margin).any():
+        raise ValueError("The object reaches the sheet's squares, or the photos don't pin it down. Put it in the "
+                         "middle of the white area, clear of the squares, and take photos from all the way round.")
+
+
 def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timings=None):
     import time
     timings = {} if timings is None else timings
@@ -43,6 +96,7 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
     views, K, rms = markers.solve([(n, cv2.imread(full, cv2.IMREAD_GRAYSCALE), cv2.imread(p).shape[1::-1])
                                    for n, p, full in prepared])
     posed = {v["name"] for v in views}
+    check_coverage(views)
     timings["markers"] = round(time.time() - t, 1); t = time.time()
     progress("masks", f"{len(views)} cameras placed; SAM 3.1 is cutting the object out")
     masks = masks_for([(n, p) for n, p, _ in prepared if n in posed], prompt, os.path.join(out_dir, "masks.pkl"))
@@ -50,6 +104,7 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
     mask_list = [masks[v["name"]] for v in views]
     timings["masks"] = round(time.time() - t, 1); t = time.time(); progress("hull", "building the shape from the photos")
     mesh = visual_hull(views, mask_list, step=step)
+    check_bounded(mesh)
     timings["hull"] = round(time.time() - t, 1)
     mesh.export(os.path.join(out_dir, "hull.stl"))
     agreement = {v["name"]: round(iou(silhouette(mesh, v, size), m), 3) for v, m in zip(views, mask_list)}

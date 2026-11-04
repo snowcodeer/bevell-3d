@@ -3,9 +3,12 @@ import numpy as np, trimesh
 from skimage import measure
 from .project import project
 
-# The white area inside the markers, in world mm, and how tall an object may be.
+# The white area inside the markers, in world mm, and how tall an object may be. Above the
+# object, points out of most photos' frames are carved by none, so only what rests on the sheet
+# is kept (on_sheet): with a 160 mm ceiling the 162 mm clock lost its top, and raising it alone
+# grew a floating tower up to the ceiling over Mario and the clock.
 AREA_LO = np.array([31.0, 31.0, 0.0])
-AREA_HI = np.array([266.0, 179.0, 160.0])
+AREA_HI = np.array([266.0, 179.0, 250.0])
 
 
 def grid(lo, hi, step):
@@ -27,15 +30,27 @@ def carve(pts, views, masks):
     return keep
 
 
+def on_sheet(occ, reach=3):
+    """The occupied cells connected to the bottom layer: the object, not what floats above it.
+    Connection is judged on the cells grown by `reach`, so a thin neck still joins (the clock's
+    stem and loop handle came apart at 2 mm cells and were dropped)."""
+    from scipy import ndimage
+    grown = ndimage.binary_dilation(occ, iterations=reach)
+    lab, n = ndimage.label(grown)
+    base = set(np.unique(lab[:, :, :reach + 2])) - {0}
+    return occ & np.isin(lab, list(base)) if base else np.zeros_like(occ)
+
+
 def visual_hull(views, masks, step=0.75, coarse=2.0, smooth=True):
     """Coarse carve over the whole white area to find the object, then a fine one round it."""
-    pts, _ = grid(AREA_LO, AREA_HI, coarse)
-    sel = pts[carve(pts, views, masks)]
+    pts, cshape = grid(AREA_LO, AREA_HI, coarse)
+    sel = pts[on_sheet(carve(pts, views, masks).reshape(cshape)).ravel()]
     if len(sel) == 0:
-        raise ValueError("nothing survives every photo: check the masks and poses")
+        raise ValueError("Nothing is left standing on the sheet once every photo has its say: check the photos "
+                         "show the object, in the middle of the sheet.")
     lo = sel.min(0) - 2 * coarse; hi = sel.max(0) + 2 * coarse; lo[2] = 0.0
     fine, shape = grid(lo, hi, step)
-    occ = carve(fine, views, masks).reshape(shape)
+    occ = on_sheet(carve(fine, views, masks).reshape(shape))
     occ[:, :, 0] = occ[:, :, 1]          # it rests on the paper
     vol = np.pad(occ.astype(np.float32), 1)
     verts, faces, _, _ = measure.marching_cubes(vol, 0.5)
