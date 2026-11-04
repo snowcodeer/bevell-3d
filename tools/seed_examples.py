@@ -46,8 +46,10 @@ def seed(name):
         summary["holder"] = {**cad["holder_params"], "floor_mm": cad["holder_params"]["floor"]}
     else:
         copies.update({"holder.stl": "holder.stl", "holder_nest.stl": "holder_nest.stl", "holder.3mf": "holder.3mf"})
-    # The CAD agent's best run: the richer brief (rich/), else tree mode (tree/), else the scan's own.
-    agent_src = next((d for d in (f"out/bench/{name}/rich", f"out/bench/{name}/tree") if os.path.exists(f"{d}/agent_tree.json")), src)
+    # The CAD agent's best run: the richer brief (rich/), else tree mode (tree/), else the shown
+    # run's own, else the full run's (a rerun with the closer look has no agent run of its own).
+    agent_src = next((d for d in (f"out/bench/{name}/rich", f"out/bench/{name}/tree", src, f"out/bench/{name}/full")
+                      if os.path.exists(f"{d}/agent_tree.json")), src)
     for a, b in copies.items():
         here = agent_src if a.startswith("agent_") else src
         if a.startswith("agent_") and here != src and not os.path.exists(f"{here}/{a}"):

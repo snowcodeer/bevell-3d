@@ -334,8 +334,14 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   0.86. A placed photo with no mask is asked again on a crop of the full-resolution original
   round where a rough hull of the other photos puts the object, zoomed up to 4x, and the mask
   counts only if 90% of it lies inside that hull's outline. The servo went from 8 to 16 of 16
-  photos and its hull to 0.68 mm from the true surface. Earlier runs lost photos the same
-  way (bracket 4, gear 2, five others 1). `report.json` lists them as `looked_closer`.
+  photos and its hull to 0.68 mm from the true surface. Earlier runs lost photos too
+  (bracket 4, gear 2, five others 1), but those misses were intermittent: rerun the same day
+  (`out/bench/<part>/rerun`), the bracket and gear got all 16 masks first time. `report.json`
+  lists the photos looked at again as `looked_closer`.
+- **Run-to-run variation:** the bracket and gear rerun from the same photos moved in size by
+  0.8 and 0.4 mm (2.7 to 3.5, 1.3 to 1.7 mm off) and in surface distance by 0.01 and 0.03 mm.
+  SAM 3.1's masks and SAM 3D's shape differ between runs. The README's table keeps the first
+  runs.
 - **Robot fixture** (`bevell3d/fixture.py`, every scan): finger reliefs on the grasp's squeeze
   axis sized from the SO-101 pads, a tab with a 30 mm recess for a printed ArUco tag (4x4, id
   40; `tag.pdf` marks the edge to stick towards the part), and `fixture.json` with the pick in

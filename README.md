@@ -79,6 +79,9 @@ whole pipeline with real model calls, then scored against the true meshes
 | Hobby servo | NURBS | 1.6 | 0.9 | 0.29 | |
 
 - Camera positions within 0.2 to 0.3 mm (median). Size within 2 mm on 12 of 15 objects.
+- Runs vary: the bracket and gear, run again from the same photos, moved 0.8 and 0.4 mm in
+  size and under 0.05 mm in surface distance (SAM 3.1's masks and SAM 3D's shapes differ
+  from run to run).
 - "Model to truth" is the mean distance from the true surface. Open insides a camera cannot
   carve from outside (the mug, the letter holder's compartments, the fish's cup) cost 3 to 5
   mm; Muse Spark's feature tree models the mug's inside and comes to 1.8.
