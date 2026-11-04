@@ -131,10 +131,6 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 /* The start screen fits one phone screen, Safari's bars included: it tightens as the screen gets shorter. */
 .start { gap: 14px; }
 .start .hero { display: grid; gap: 8px; }
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 6px; align-content: start; min-width: 0; }
-.tile .ic { width: 32px; height: 32px; border-radius: 10px; background: rgb(57 90 246 / .14); display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--accent-pale); }
-.tile b { font-size: 13px; line-height: 1.3; font-weight: 600; }
 .start .tool-entry { padding: 14px; }
 .start .tool-entry .btn { min-height: 46px; }
 .exlink { justify-self: start; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; font-size: 14px; color: var(--accent-light); text-decoration: none; padding: 4px 0; }
@@ -148,7 +144,6 @@ main:has(> .start.on) { display: grid; padding-bottom: 8px; }
   .start { gap: 10px; }
   .start h1 { font-size: 26px; }
   .start .lede { font-size: 14.5px; }
-  .tile { padding: 8px; gap: 4px; } .tile .ic { width: 26px; height: 26px; font-size: 12px; } .tile b { font-size: 12px; }
   .start .tool-entry { padding: 12px; gap: 8px; } .start .tool-entry .btn { min-height: 42px; font-size: 15px; }
   .start .tool-entry .get { grid-template-columns: 34px 1fr; gap: 10px; } .start .tool-entry .get .ic { width: 34px; height: 34px; border-radius: 10px; }
   .startfoot .small { font-size: 12px; }
@@ -230,10 +225,10 @@ body.camopen { overflow: hidden; }
         <h1>Photos in.<br> CAD out.</h1>
         <p class="lede">Outputs a true-to-scale model and a holder to print.</p>
       </div>
-      <div class="tiles">
-        <div class="tile"><span class="ic">mm</span><b>Measured, not guessed</b></div>
-        <div class="tile"><span class="ic">3D</span><b>STEP and STL</b></div>
-        <div class="tile"><span class="ic">▣</span><b>Holder for Bambu Studio</b></div>
+      <div class="card gets">
+        <div class="get"><span class="ic">mm</span><b>Measured, not guessed</b></div>
+        <div class="get"><span class="ic">3D</span><b>STEP and STL</b></div>
+        <div class="get"><span class="ic">▣</span><b>Holder, straight to Bambu Studio</b></div>
       </div>
       <div class="card tool-entry">
         <div class="get"><span class="ic">✂︎</span><div><b>Custom robot grippers for a tool</b><p class="muted small">Works with scissors for now, on the SO-101.</p></div></div>
