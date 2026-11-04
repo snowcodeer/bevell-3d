@@ -1,0 +1,90 @@
+<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#14161A; --card:#1B1E24; --line:#2A2E36; --fg:#fff; --muted:#9AA0AA; --accent:#395AF6; --pale:#8095F9;
+        --display:"Outfit","Avenir Next",sans-serif; --body:"Inter",-apple-system,sans-serif; }
+* { box-sizing:border-box; }
+html,body { margin:0; width:1920px; height:1080px; overflow:hidden; }
+body { background:var(--bg); color:var(--fg); font:26px/1.4 var(--body); padding:52px 72px 0; position:relative;
+       background-image: radial-gradient(1200px 600px at 80% -10%, rgb(57 90 246 / .16), transparent 60%),
+                         radial-gradient(900px 500px at 0% 110%, rgb(57 90 246 / .08), transparent 60%); }
+.top { display:flex; align-items:center; justify-content:space-between; }
+.brand { display:flex; align-items:center; gap:14px; } .brand .mark { height:42px; } .brand .word { height:20px; }
+.badge { font:600 18px var(--body); color:var(--pale); background:rgb(57 90 246 / .16); padding:4px 13px; border-radius:999px; }
+.step { font:600 20px var(--body); color:var(--muted); }
+h1 { font:700 72px/1.04 var(--display); margin:40px 0 10px; letter-spacing:-0.015em; max-width:1700px; }
+h1 .acc { color:var(--pale); }
+.sub { font:500 32px/1.3 var(--display); color:var(--muted); margin:0 0 30px; max-width:1500px; }
+.meta { font:600 20px var(--body); color:var(--pale); background:rgb(57 90 246 / .18); border:1px solid rgb(57 90 246 / .5);
+        padding:3px 14px; border-radius:999px; vertical-align:middle; margin-left:14px; position:relative; top:-10px; }
+.frame { border-radius:24px; overflow:hidden; border:1px solid var(--line); background:var(--card); position:relative; }
+.frame img { display:block; width:100%; height:100%; object-fit:cover; }
+.frame.contain img { object-fit:contain; }
+.frame.light { background:#F2F3F5; }
+.cap { position:absolute; left:18px; bottom:16px; font:600 22px var(--body); color:#fff; background:rgb(20 22 26 / .78);
+       padding:6px 14px; border-radius:12px; }
+.frame.light .cap { color:#14161A; background:rgb(255 255 255 / .85); }
+.row { display:flex; gap:28px; }
+.pills { display:flex; gap:16px; flex-wrap:wrap; margin-top:26px; }
+.pill { font:600 26px var(--display); background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px 24px; }
+.pill b { color:var(--pale); font-weight:700; }
+.list { display:flex; flex-direction:column; gap:18px; }
+.li { display:flex; gap:18px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:20px; padding:20px 24px; }
+.li .n { flex:0 0 40px; height:40px; border-radius:50%; background:var(--accent); font:700 21px var(--display); display:grid; place-items:center; }
+.li h3 { font:600 30px/1.15 var(--display); margin:2px 0 4px; } .li p { margin:0; color:var(--muted); font-size:24px; }
+footer { position:absolute; left:72px; right:72px; bottom:30px; display:flex; justify-content:space-between; font:500 19px var(--body); color:var(--muted); }
+</style><style>
+h1 { margin:30px 0 8px; font-size:64px; }
+.sub { font-size:28px; margin:0 0 26px; }
+.box { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:26px 30px; position:relative; }
+.box h3 { font:600 34px/1.15 var(--display); margin:0 0 8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.box p { margin:0; color:var(--muted); font-size:26px; line-height:1.35; }
+.box.acc { border-color:rgb(57 90 246 / .7); box-shadow:0 0 0 1px rgb(57 90 246 / .35), 0 0 40px rgb(57 90 246 / .12); }
+.tag { font:600 20px var(--body); color:var(--pale); background:rgb(57 90 246 / .18); border:1px solid rgb(57 90 246 / .5);
+       padding:2px 12px; border-radius:999px; }
+.tag.grey { color:var(--muted); background:rgb(255 255 255 / .05); border-color:var(--line); }
+.n { flex:0 0 42px; width:42px; height:42px; border-radius:50%; background:var(--accent); font:700 20px var(--display);
+     display:inline-grid; place-items:center; color:#fff; }
+.flow { display:flex; align-items:stretch; gap:0; }
+.arrow { flex:0 0 54px; display:grid; place-items:center; }
+.arrow svg { width:40px; height:28px; }
+.down { display:grid; place-items:center; height:46px; }
+.down svg { width:28px; height:40px; }
+.group { background:rgb(255 255 255 / .02); border:1px dashed #333844; border-radius:26px; padding:26px 24px; }
+.group > .gh { font:600 25px var(--body); color:var(--pale); margin:0 0 14px 6px; letter-spacing:.01em; }
+ul.k { margin:6px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:14px; }
+ul.k li { font-size:26px; color:#D6D9DF; padding-left:24px; position:relative; line-height:1.32; }
+ul.k li::before { content:""; position:absolute; left:2px; top:14px; width:9px; height:9px; border-radius:50%; background:var(--accent); }
+.stat { font:600 27px var(--display); background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 20px; }
+.stat b { color:var(--pale); }
+.stage { position:absolute; left:72px; right:72px; top:290px; bottom:96px; display:flex; flex-direction:column; justify-content:center; }
+</style></head><body>
+<div class="top"><div class="brand"><img class="mark" src="logo-icon.svg"><img class="word" src="bevell-wordmark.svg"><span class="badge">3D</span></div><div class="step">Architecture · 1 of 4</div></div>
+
+<h1>The system</h1>
+<p class="sub">A phone, one web app on Modal, and three Meta models.</p><div class="stage">
+<div class="flow" style="align-items:center">
+ <div style="flex:0 0 380px; display:flex; flex-direction:column; gap:18px">
+  <div class="box"><h3>Phone browser</h3><p>Guided camera: the sheet and arrows for each angle</p></div>
+  <div class="box"><h3>Result</h3><p>3D viewer, then STEP, STL and a 3MF for Bambu Studio</p></div>
+ </div>
+ <div style="flex:0 0 70px; display:flex; flex-direction:column; gap:110px"><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M38 14H8M18 4L6 14l12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+ <div class="box acc" style="flex:1">
+  <h3>Web app on Modal <span class="tag grey">FastAPI · 4 CPUs</span></h3>
+  <p>Takes the photos, keeps every scan on a Modal volume, and serves the files.</p>
+  <div class="box" style="margin-top:18px; background:#20242B"><h3>Each scan: its own process</h3><p>The pipeline, from photos to CAD and grippers</p></div>
+ </div>
+ <div style="flex:0 0 70px; display:flex; flex-direction:column; gap:150px"><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+ <div style="flex:0 0 470px; display:flex; flex-direction:column; gap:18px">
+  <div class="box"><h3>Meta Model API <span class="tag grey">HTTPS</span></h3>
+   <ul class="k"><li>Muse Spark <span class="tag">Meta</span></li><li>SAM 3.1 <span class="tag">Meta</span></li></ul></div>
+  <div class="box"><h3>Modal GPU <span class="tag grey">L40S</span></h3>
+   <ul class="k"><li>SAM 3D Objects <span class="tag">Meta</span></li><li>Open weights</li></ul></div>
+ </div>
+</div>
+<div style="display:flex; gap:16px; margin-top:56px; align-items:center">
+ <span style="font:600 24px var(--body); color:var(--muted); margin-right:6px">Who can run it</span>
+ <div class="stat">Judges' passcode <b>50 a day</b></div>
+ <div class="stat">Your own Meta key <b>200 a day</b></div>
+ <div class="stat">Bevell Unlimited key <b>20 a day</b></div>
+</div></div><footer><span>Bevell 3D · Meta AI hackathon</span><span>Architecture</span></footer></body></html>
