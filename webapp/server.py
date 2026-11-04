@@ -60,7 +60,7 @@ FILES = {  # name -> (label, media type)
     "agent_model.py": ("Editable CAD by Muse Spark, CadQuery script", "text/x-python"),
     "agent_model.stl": ("Editable CAD by Muse Spark, STL", "model/stl"),
 }
-MIN_PHOTOS, MAX_PHOTOS = 8, 40
+MIN_PHOTOS, MAX_PHOTOS = 8, 40     # the guided set is 11: 6 at 45 degrees, 4 low, 1 from above
 ID = re.compile(r"^[a-z0-9-]{4,64}$")
 # Deployed, a scan or a CAD agent run needs the passcode and counts against a daily cap, so the
 # Meta and Modal credits cannot be run down. Both are off unless set (the local app stays open).

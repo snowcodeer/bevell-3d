@@ -257,14 +257,14 @@ body.camopen { overflow: hidden; }
     <section class="screen" data-screen="place">
       <h2 id="place-title">Object in the middle</h2>
       <svg class="art" viewBox="0 0 320 210" role="img" aria-label="The object in the middle of the sheet, inside the squares">
-        <rect x="18" y="16" width="284" height="178" rx="6" fill="#eceef2"/>
+        <rect x="26.3" y="10.5" width="267.3" height="189" rx="5" fill="#eceef2"/>
         <g fill="#14161a">
-          <rect x="28" y="26" width="18" height="18"/><rect x="83" y="26" width="18" height="18"/><rect x="138" y="26" width="18" height="18"/><rect x="193" y="26" width="18" height="18"/><rect x="248" y="26" width="18" height="18"/><rect x="274" y="26" width="18" height="18"/>
-          <rect x="28" y="166" width="18" height="18"/><rect x="83" y="166" width="18" height="18"/><rect x="138" y="166" width="18" height="18"/><rect x="193" y="166" width="18" height="18"/><rect x="248" y="166" width="18" height="18"/><rect x="274" y="166" width="18" height="18"/>
-          <rect x="28" y="72" width="18" height="18"/><rect x="28" y="120" width="18" height="18"/><rect x="274" y="72" width="18" height="18"/><rect x="274" y="120" width="18" height="18"/>
+          <rect x="34.4" y="18.6" width="19.8" height="19.8"/><rect x="67.5" y="18.6" width="19.8" height="19.8"/><rect x="100.5" y="18.6" width="19.8" height="19.8"/><rect x="133.6" y="18.6" width="19.8" height="19.8"/><rect x="166.6" y="18.6" width="19.8" height="19.8"/><rect x="199.7" y="18.6" width="19.8" height="19.8"/><rect x="232.7" y="18.6" width="19.8" height="19.8"/><rect x="265.8" y="18.6" width="19.8" height="19.8"/>
+          <rect x="34.4" y="49.2" width="19.8" height="19.8"/><rect x="265.8" y="49.2" width="19.8" height="19.8"/><rect x="34.4" y="95.1" width="19.8" height="19.8"/><rect x="265.8" y="95.1" width="19.8" height="19.8"/><rect x="34.4" y="141" width="19.8" height="19.8"/><rect x="265.8" y="141" width="19.8" height="19.8"/>
+          <rect x="34.4" y="171.6" width="19.8" height="19.8"/><rect x="67.5" y="171.6" width="19.8" height="19.8"/><rect x="100.5" y="171.6" width="19.8" height="19.8"/><rect x="133.6" y="171.6" width="19.8" height="19.8"/><rect x="166.6" y="171.6" width="19.8" height="19.8"/><rect x="199.7" y="171.6" width="19.8" height="19.8"/><rect x="232.7" y="171.6" width="19.8" height="19.8"/><rect x="265.8" y="171.6" width="19.8" height="19.8"/>
         </g>
-        <rect x="56" y="54" width="208" height="102" rx="4" fill="none" stroke="#395af6" stroke-dasharray="5 5" opacity=".6"/>
-        <rect x="128" y="80" width="64" height="50" rx="12" fill="#395af6"/>
+        <rect x="62.3" y="46.5" width="195.3" height="117" rx="4" fill="none" stroke="#395af6" stroke-dasharray="5 5" opacity=".6"/>
+        <rect x="127.6" y="80.7" width="64.8" height="48.6" rx="11" fill="#395af6"/>
       </svg>
       <ul class="tips" id="place-tips">
         <li>Inside the dashed line, the way up you want it held.</li>
@@ -444,10 +444,11 @@ function placeScreen() {
   actions(button("Next", "primary", () => go("shoot")));
 }
 
-// ---------- photos: 6 from about 45 degrees, 8 from low down, 2 from above ----------
+// ---------- photos: 6 from about 45 degrees, 4 low, 1 from above (the low ones measure thickness: without them a tool's loops and pivot came out wrong) ----------
+const MIN_SHOTS = 8;   // the server's MIN_PHOTOS
 const SHOTS = [
   ...[0, 60, 120, 180, 240, 300].map((a, i) => ({ ring: "45° UP", r: 42, a, text: i ? "Step round a little." : "Phone at 45°, whole sheet in view." })),
-  ...[15, 60, 105, 150, 195, 240, 285, 330].map((a, i) => ({ ring: "LOW, NEAR THE TABLE", r: 66, a, text: i ? "Step round a little." : "Now go low, phone almost on the table." })),
+  ...[45, 135, 225, 315].map((a, i) => ({ ring: "LOW, NEAR THE TABLE", r: 66, a, text: i ? "Step round to the next corner." : "Now 4 low ones, phone almost on the table." })),
   { ring: "FROM ABOVE", r: 12, a: 90, text: "Straight down." },
 ];
 const urls = new Map(), thumb = (f) => { if (!urls.has(f)) urls.set(f, URL.createObjectURL(f)); return urls.get(f); };
@@ -471,9 +472,9 @@ function shootScreen() {
   const pick = button("From your photos", "ghost", () => $("file").click());
   const review = button(`Done · ${n} photos`, "primary", () => go("review"));
   const guided = button(n ? `Guided camera · photo ${Math.min(n + 1, SHOTS.length)}` : "Open the guided camera", "primary", openCamera);
-  if (COARSE && CAN_GUIDE) actions(...(n >= 8 ? [n < SHOTS.length ? guided : take, review] : [guided, pick]));
-  else if (COARSE) actions(...(n >= 8 ? [take, review] : [take, pick]));
-  else actions(...(n >= 8 ? [review, pick] : [button("Choose photos", "primary", () => $("file").click())]));
+  if (COARSE && CAN_GUIDE) actions(...(n >= MIN_SHOTS ? [n < SHOTS.length ? guided : take, review] : [guided, pick]));
+  else if (COARSE) actions(...(n >= MIN_SHOTS ? [take, review] : [take, pick]));
+  else actions(...(n >= MIN_SHOTS ? [review, pick] : [button("Choose photos", "primary", () => $("file").click())]));
 }
 function addFiles(list) {
   const key = (f) => `${f.name}:${f.size}:${f.lastModified}`, seen = new Set(files.map(key));
@@ -543,7 +544,7 @@ function drawGuide() {
   $("cv-text").textContent = first ? `${GUIDE_TEXT[shot.ring]} Line the squares up with the squares.` : `${shot.text} Line the squares up with the squares.`;
   $("cv-dial").innerHTML = dialSVG(n, false) + pathArrow(n);
   $("cv-move").innerHTML = moveHint(n);
-  $("cv-done").disabled = n < 8;
+  $("cv-done").disabled = n < MIN_SHOTS;
   const last = files[n - 1];
   if (last && !/heic|heif/i.test(last.name)) $("cv-last").src = thumb(last); else $("cv-last").removeAttribute("src");
   drawTilt();
@@ -637,11 +638,11 @@ $("file").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
 
 function reviewScreen() {
   const n = files.length;
-  $("r-status").textContent = n >= 12 ? `${n} photos · good` : n >= 8 ? `${n} photos · ${SHOTS.length} is better` : `${n} photos · add ${8 - n} more`;
+  $("r-status").textContent = n >= MIN_SHOTS ? `${n} photos · good` : `${n} photos · add ${MIN_SHOTS - n} more`;
   $("r-status").className = "status " + (n >= 12 ? "ok" : "warn");
   $("grid").innerHTML = files.map((f, i) => `<div class="ph">${/heic|heif/i.test(f.name) ? `<div class="heic">HEIC</div>` : `<img alt="" src="${thumb(f)}">`}<button aria-label="Remove photo ${i + 1}" data-i="${i}">×</button></div>`).join("");
   $("grid").querySelectorAll("button").forEach((b) => (b.onclick = () => { files.splice(+b.dataset.i, 1); reviewScreen(); }));
-  actions(button("Make my CAD", "primary", upload, n < 8 || n > 40), button("Add more", "ghost", () => go("shoot")));
+  actions(button("Make my CAD", "primary", upload, n < MIN_SHOTS || n > 40), button("Add more", "ghost", () => go("shoot")));
 }
 // Deployed, a run needs the passcode the server asks for; it is remembered on this device.
 // Or the visitor's own Meta Model API key, or a Bevell Unlimited subscriber's Bevell API key (bvl_...,
