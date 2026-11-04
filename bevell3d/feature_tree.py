@@ -449,6 +449,11 @@ def build(ui=None, close=False):
                 elif op in ("fillet", "chamfer"):
                     edges = edges_of(s["edges"])
                     size = s.get("radius", s.get("size", 1))
+                    if edges.count == 0:
+                        # As CadQuery does: no edge matches, so the step is skipped with a warning.
+                        # Fusion raises instead ("Cannot create new fillet with empty entities").
+                        report.setdefault("warnings", []).append(f"{s.get('id', op)}: no {s['edges']} edges, skipped")
+                        continue
                     if op == "fillet":
                         fi = F.filletFeatures.createInput()
                         try:
@@ -470,7 +475,9 @@ def build(ui=None, close=False):
             bb = b.boundingBox
             report["bodies"].append({"name": b.name, "volume_mm3": round(b.physicalProperties.volume * 1000, 1),
                                      "size_mm": [round((bb.maxPoint.x - bb.minPoint.x) * 10, 2), round((bb.maxPoint.y - bb.minPoint.y) * 10, 2),
-                                                 round((bb.maxPoint.z - bb.minPoint.z) * 10, 2)], "solid": b.isSolid})
+                                                 round((bb.maxPoint.z - bb.minPoint.z) * 10, 2)], "solid": b.isSolid,
+                                     "min_mm": [round(bb.minPoint.x * 10, 2), round(bb.minPoint.y * 10, 2), round(bb.minPoint.z * 10, 2)],
+                                     "max_mm": [round(bb.maxPoint.x * 10, 2), round(bb.maxPoint.y * 10, 2), round(bb.maxPoint.z * 10, 2)]})
     except Exception:
         report["fatal"] = traceback.format_exc()[-1500:]
     if close and doc:

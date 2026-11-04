@@ -104,7 +104,13 @@ def main(keep=False, only=None):
             ok = False; why.append("no solid body")
         else:
             fv = sum(b["volume_mm3"] for b in bodies)
-            fs = bodies[0]["size_mm"]
+            # The size of everything together: a tree may make a part as its own body (the mouse's
+            # scroll wheel), which Fusion keeps apart and CadQuery fuses.
+            if all("min_mm" in b for b in bodies):
+                lo = [min(b["min_mm"][i] for b in bodies) for i in range(3)]; hi = [max(b["max_mm"][i] for b in bodies) for i in range(3)]
+                fs = [hi[i] - lo[i] for i in range(3)]
+            else:
+                fs = bodies[0]["size_mm"]
             dv = fv / cq["volume_mm3"] - 1
             ds = max(abs(sorted(fs)[i] - sorted(cq["size_mm"])[i]) for i in range(3))
             if abs(dv) > 0.03 or ds > 0.5:
