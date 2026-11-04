@@ -117,7 +117,20 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     if not all(h["loop"] for h in info["handles"]):
         raise ValueError("Custom jaws are for scissors: both handles need a finger loop.")
     pivot, toward = pivot_of(outline, info)
-    t = float(mesh.bounds[1][2] - mesh.bounds[0][2])
+    # The pivot screw or rivet in the photo from above, when there is one: the outline's guess
+    # (where the two handles join) missed a real pair's screw by 63 mm, because its clear handle
+    # joins both loops in the middle.
+    from .tool_geometry import find_pivot, tool_thickness, flat_model
+    t = tool_thickness(info)
+    pivot_how = {"how": "where the handles join (no screw circle found)"}
+    if os.path.exists(os.path.join(scan_dir, "views.pkl")):
+        found, how = find_pivot(scan_dir, outline, info, t)
+        if found is not None:
+            pivot, pivot_how = np.asarray(found, float), how
+    # What the preview and the simulation show: SAM 3D's model when the scan made one (it keeps
+    # the thin blades), else the outline extruded to the measured thickness.
+    shown = os.path.join(scan_dir, "sam3d_fitted.stl")
+    mesh = trimesh.load(shown) if os.path.exists(shown) else flat_model(outline, t)
     u = -toward                                          # pivot -> loops, in the sheet plane
     v = np.array([-u[1], u[0]])
     fixed = trimesh.load(os.path.join(ROOT, "assets", "wrist_roll_follower_so101_v1.stl")); fixed.apply_scale(1000)
@@ -177,7 +190,7 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     sm, sf = side_of(cen[km]), side_of(cen[1 - km])
     half_m = sc.slice_plane(pv, V * np.sign(sm), cap=True)
     half_f = sc.slice_plane(pv, V * np.sign(sf), cap=True)
-    report = {"pivot_on_hinge": True, "scissors_plane_y_mm": round(float(y_mid), 1), "loops": "forward" if loops_forward else "back",
+    report = {"pivot_on_hinge": True, "pivot_found": pivot_how, "scissors_plane_y_mm": round(float(y_mid), 1), "loops": "forward" if loops_forward else "back",
               "side": "left" if side < 0 else "right", "flipped": flip,
               "moving_loop": km, "arm_mm": {"moving": round(dm, 1), "fixed": round(df, 1)}, "clips": reps,
               "parts": {"moving_jaw": {"faces": len(new_moving.faces), "watertight": bool(new_moving.is_watertight), "volume_cm3": round(new_moving.volume / 1000, 2)},

@@ -83,7 +83,7 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
         import cadquery as cq
         from .cad import to_cad, holder_cad_safe, to_mesh, write_dxf
         solid, kind, info, why = to_cad(final, plan["route"])
-        if kind == "mesh" and not tool:
+        if kind == "mesh":
             # Freeform: smooth NURBS patches instead of the mesh's flat triangles, when they work.
             progress("cad", "smoothing the CAD surface")
             try:
@@ -248,7 +248,7 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
         log(f"revolved: height {rrep['height_mm']} mm, widest {rrep['max_diameter_mm']} mm, agreement {rrep['agreement']:.3f}")
         if rrep["agreement"] >= summary["hull_agreement"] - KEEP_MARGIN:
             final, source = rev, "revolved"
-    if use_sam3d and plan["route"] == "freeform" and not tool:
+    if use_sam3d and plan["route"] == "freeform":
         try:
             name = best_photo(views, masks, hull.bounding_box.centroid)
             i = [v["name"] for v in views].index(name)
