@@ -6,10 +6,11 @@ Hackathon (27 Oct to 4 Nov 2026).
 
 ## What is new in this hackathon
 
-Everything in this repository was written during the hackathon. It talks to
-[Bevell](https://bevell.app), the existing product that turns photos and scans into 2D
-CAD, only through Bevell's public API. Bevell's own code is not here and is not part of
-this submission.
+Everything in this repository was written during the hackathon (27 Oct to 4 Nov 2026). It
+is built for [Bevell](https://bevell.app), an existing product that turns photos and scans
+into 2D CAD, but it uses none of Bevell's code or services: Bevell's own code is not here and
+is not part of this submission. Joining the two later means calling this service from Bevell,
+or Bevell's public API from here, never sharing code.
 
 ## What it does
 
