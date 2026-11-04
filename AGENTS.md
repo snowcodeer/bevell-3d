@@ -507,6 +507,32 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   `execute_script` tools. A live "send to Fusion" could post the generated script to
   `execute_script` when the add-in is running. Not wired up yet.
 
+## Custom robot grippers for a tool (4 Nov, beta, SO-101 only)
+
+Gripper mode (`mode=gripper` on upload, "Make custom robot grippers" in the app) runs the whole
+pipeline (SAM 3D and NURBS included), then `bevell3d/custom_jaws.py` designs two new SO-101
+parts that replace the stock ones: the moving jaw (`custom_moving_jaw.stl`) and the wrist-roll
+follower (`custom_wrist_roll_follower.stl`), both in `custom_jaws.3mf`.
+
+- The scissors sit beside the gripper with their pivot on the gripper's hinge
+  (H = (20.2, 18.8, -23.4) mm, axis -y, from `third_party/so101/so101_new_calib.xml`), so
+  the blades open 1:1 with the jaw. The stock fingers are cut off (`FIXED_CUT_Z`, `HUB_R`).
+- The pivot is the screw: `tool_geometry.find_pivot` flattens the most top-down photo onto
+  the sheet at 0.1 mm a pixel and takes the clearest 2 to 8 mm circle near the long axis on
+  the blade side. On her scissors it lands on the screw (r 3.4 mm, 0.3 mm off the axis). The
+  outline's guess (where the handles join) missed by 63 mm.
+- Each finger loop snaps into a clip (`loop_clip_mesh`): a channel round the loop's own curve,
+  open on the hole side, 0.3 mm clearance. One lip, on the wall away from the arm (the arm
+  stiffens the wall it joins), makes the mouth 0.5 mm narrower than the loop, behind a
+  three-step lead-in that starts 0.6 mm wider. About 1% strain on a 1.8 mm wall. A keep-out
+  is cut from the finished part so nothing fills the channel or the way in.
+- Arms are rounded hulls (`_rounded_hull`, 2 mm) from the clip to a flared patch sunk 2 mm
+  into the jaw. The clips themselves are still square extrusions.
+- `best_design` tries side, loops forward or back and flip, and keeps the first with no
+  collisions (decimated meshes). `simulate` runs MuJoCo: on the live run f684f76b871f the
+  gripper's 25.8 degrees opened the blades 25.8 degrees, 0 mm3 of collisions.
+- Not yet printed. Print the moving jaw first to test the snap.
+
 ## Gotchas already paid for
 
 - `cv2.fillPoly` with many triangles fills by even-odd and holes the outline; `project.silhouette`
