@@ -456,7 +456,7 @@ def smooth_outline(poly, tol=0.5):
     return "curve", Polygon(out.exterior)
 
 
-def _resample(poly, spacing=1.5):
+def _even_points(poly, spacing=1.5):
     """Evenly spaced points for an interpolating spline. Spacing them by bend as well, tried on
     3 Nov to keep a box's corners tight, crowded points into small kinks, the spline wobbled
     there, and every edge treatment failed on Mario and the mug."""
@@ -555,7 +555,7 @@ def holder_cad(mesh, p=HolderParams(), skip=()):
             # fillet cannot pass a bend tighter than itself: Mario's pocket had 0.8 mm corners
             # under a 0.8 mm lead-in. It only ever widens the pocket.
             target = shape.buffer(p.clearance + grow + 2, join_style=1).buffer(-2, join_style=1)
-            pocket_pts = _resample(target)
+            pocket_pts = _even_points(target)
             pocket_sk = sp(pocket_pts)
             pocket = _wire_polygon(pocket_sk)
             miss = _outside(pocket, need)
@@ -566,7 +566,7 @@ def holder_cad(mesh, p=HolderParams(), skip=()):
         # turns the inward corners an offset leaves into rounds wider than the rim fillet, and
         # only ever adds material.
         outer_target = target.buffer(p.wall + 3.5, join_style=1).buffer(-3.5, join_style=1)
-        outer_pts = _resample(outer_target)
+        outer_pts = _even_points(outer_target)
         outer_sk = sp(outer_pts)
         outer = _wire_polygon(outer_sk)
     body = outer_sk.extrude(total).cut(pocket_sk.extrude(depth + 1).translate((0, 0, p.floor)))
