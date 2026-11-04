@@ -450,12 +450,35 @@ def run_agent(out_dir, rounds=3, log=print, key=None, mode="tree"):
     return report
 
 
+def rebuild_outputs(out_dir):
+    """agent_model.step, agent_model.stl and agent_fusion.zip made again from agent_tree.json
+    with today's code, with no model calls: the tuned dimensions stay, only how the tree builds
+    changes (a tree written before the edge rules were shared with Fusion carries a Fusion
+    script that may fail a step). Returns the build's warnings."""
+    import cadquery as cq
+    from .feature_tree import to_cadquery, write_fusion_zip
+    tree = json.load(open(os.path.join(out_dir, "agent_tree.json")))
+    rep = json.load(open(os.path.join(out_dir, "agent_report.json")))
+    best = next(r for r in rep["rounds"] if r["round"] == rep["best_round"])
+    shape, warns = to_cadquery(tree, {q["name"]: q["value"] for q in tree["parameters"]})
+    cq.exporters.export(cq.Workplane().add(shape), os.path.join(out_dir, "agent_model.step"))
+    vs, fs = shape.tessellate(0.1, 0.35)
+    placed(np.array([v.toTuple() for v in vs], float), np.array(fs, int), best["pose"]).export(os.path.join(out_dir, "agent_model.stl"))
+    n = len(pickle.load(open(os.path.join(out_dir, "views.pkl"), "rb"))["views"]) if os.path.exists(os.path.join(out_dir, "views.pkl")) else 16
+    write_fusion_zip(out_dir, tree, f"{rep['object']}: {tree.get('features', best['features'])}", n)
+    return warns
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("scan_dir")
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--mode", choices=["tree", "code"], default="tree")
+    ap.add_argument("--rebuild", action="store_true", help="remake the outputs from agent_tree.json, no model calls")
     a = ap.parse_args()
+    if a.rebuild:
+        print(json.dumps(rebuild_outputs(a.scan_dir)))
+        raise SystemExit(0)
     rep = run_agent(a.scan_dir, a.rounds, mode=a.mode)
     print(json.dumps({k: v for k, v in rep.items() if k != "rounds"}, indent=1, default=float))
     for r in rep["rounds"]:
