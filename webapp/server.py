@@ -6,7 +6,8 @@
 Scans live under out/scans/<id>/: the uploads, every pipeline output, and status.json,
 which the page polls. One scan runs at a time per process; a second waits its turn.
 """
-import json, os, re, shutil, threading, time, traceback, uuid
+import hmac, json, os, re, shutil, sys, threading, time, traceback, uuid
+from urllib.parse import quote
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,28 +65,127 @@ ID = re.compile(r"^[a-z0-9-]{4,64}$")
 # Meta and Modal credits cannot be run down. Both are off unless set (the local app stays open).
 PASSCODE = os.environ.get("BEVELL3D_PASSCODE", "")
 DAILY_CAP = int(os.environ.get("BEVELL3D_DAILY_CAP", "0") or 0)
+# Anyone may run one on their own Meta Model API key instead (header x-model-api-key). The key
+# goes to the run's own process in memory and is written nowhere. SAM 3D still runs on our Modal
+# GPUs, so those runs have a cap of their own (0: none), and BEVELL3D_BYOK_SAM3D=0 leaves SAM 3D out.
+BYOK_DAILY_CAP = int(os.environ.get("BEVELL3D_BYOK_DAILY_CAP", "200") or 0)
+BYOK_SAM3D = os.environ.get("BEVELL3D_BYOK_SAM3D", "1") != "0"
+# Visible ASCII only, so no whitespace, and at least 8 characters, so masking it cannot touch
+# ordinary text. Never checked against the API: a key it refuses fails the run's first call.
+KEY_FORM = re.compile(r"^[\x21-\x7e]{8,512}$")
 usage_lock = threading.Lock()
 
 
+def _own_key(request):
+    key = request.headers.get("x-model-api-key", "")
+    if key and not KEY_FORM.match(key):
+        raise HTTPException(400, "That API key doesn't look right. Paste it again, with no spaces.")
+    return key or None
+
+
 def _check_access(request):
-    import hmac
-    if PASSCODE and not hmac.compare_digest(request.headers.get("x-passcode", "").strip().lower(), PASSCODE.lower()):
-        raise HTTPException(401, "That passcode isn't right.")
+    """Who pays for the run: the visitor's own key, returned, or ours behind the passcode (None)."""
+    key = _own_key(request)
+    if key:
+        return key
+    given = request.headers.get("x-passcode", "").strip()
+    if PASSCODE and not hmac.compare_digest(given.lower(), PASSCODE.lower()):
+        raise HTTPException(401, "That passcode isn't right." if given else
+                            "Enter the passcode, or your own Meta Model API key.")
+    return None
 
 
-def _count_run():
-    """Count one run against today's cap (UTC); refuse when it is used up."""
-    if not DAILY_CAP:
+def _count_run(own_key=False):
+    """Count one run against today's cap (UTC); refuse when it is used up. Runs on an own key
+    are counted apart, against their own cap."""
+    cap = BYOK_DAILY_CAP if own_key else DAILY_CAP
+    if not cap:
         return
     path = os.path.join(SCANS, "_usage.json")
     today = time.strftime("%Y-%m-%d", time.gmtime())
+    name = f"own-key {today}" if own_key else today
     with usage_lock:
         use = json.load(open(path)) if os.path.exists(path) else {}
-        if use.get(today, 0) >= DAILY_CAP:
-            raise HTTPException(429, f"Today's {DAILY_CAP} runs are used up. Try again tomorrow, or see the examples.")
-        use = {today: use.get(today, 0) + 1}
+        if use.get(name, 0) >= cap:
+            raise HTTPException(429, f"Today's {cap} runs on visitors' own keys are used up. Try again tomorrow, or see the examples."
+                                if own_key else f"Today's {cap} runs are used up. Try again tomorrow, or see the examples.")
+        use = {k: v for k, v in use.items() if k.endswith(today)}      # only today's counts are kept
+        use[name] = use.get(name, 0) + 1
         os.makedirs(SCANS, exist_ok=True)
         json.dump(use, open(path + ".tmp", "w")); os.replace(path + ".tmp", path)
+
+
+# ---------- in a run's own process: the visitor's key, used and masked out of everything ----------
+_SECRET = ""
+
+
+def _forms():
+    """The key as it could appear in text: as is, JSON-escaped, repr'd or URL-encoded."""
+    s = _SECRET
+    return sorted({s, json.dumps(s)[1:-1], repr(s)[1:-1], quote(s, safe="")}, key=len, reverse=True) if s else []
+
+
+def _scrub(x):
+    """x with the key masked, all the way down, by as many asterisks as it has characters."""
+    if not _SECRET:
+        return x
+    if isinstance(x, str):
+        for f in _forms():
+            x = x.replace(f, "*" * len(f))
+        return x
+    if isinstance(x, dict):
+        return {_scrub(k): _scrub(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_scrub(v) for v in x]
+    return x
+
+
+class _Scrubbed:
+    """stdout or stderr, masking the key in whatever is printed (tracebacks included)."""
+    def __init__(self, stream):
+        self._stream = stream
+
+    def write(self, s):
+        return self._stream.write(_scrub(s) if isinstance(s, str) else s)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def _use_key(key):
+    """Every Meta Model API call in this process uses the visitor's key. Called before any
+    bevell3d import, since sam_client reads the key when it is imported."""
+    global _SECRET
+    if not key:
+        return
+    _SECRET = key
+    os.environ["MODEL_API_KEY"] = key
+    if "bevell3d.sam_client" in sys.modules:         # imported already: set it there too
+        sys.modules["bevell3d.sam_client"].KEY = key
+    sys.stdout, sys.stderr = (_Scrubbed(s) if s is not None else s for s in (sys.stdout, sys.stderr))
+
+
+def _sweep(folder):
+    """Mask the key in any file the run wrote under the scan folder, should an API error that
+    quotes it have been saved. The mask is as long as the key, so a binary file keeps its layout.
+    upload/ holds the visitor's photos as sent, written before the run, so it is left alone."""
+    if not _SECRET:
+        return
+    forms = [f.encode() for f in _forms()]
+    for root, dirs, names in os.walk(folder):
+        if root == folder and "upload" in dirs:
+            dirs.remove("upload")
+        for n in names:
+            p = os.path.join(root, n)
+            try:
+                data = open(p, "rb").read()
+                if any(f in data for f in forms):
+                    for f in forms:
+                        data = data.replace(f, b"*" * len(f))
+                    open(p + ".tmp", "wb").write(data); os.replace(p + ".tmp", p)
+            except OSError:
+                continue
+
 
 app = FastAPI(title="Bevell 3D")
 lock = threading.Lock()
@@ -95,6 +195,7 @@ def _status(scan_id, **kw):
     path = os.path.join(SCANS, scan_id, "status.json")
     st = json.load(open(path)) if os.path.exists(path) else {}
     st.update(kw, updated=time.time())
+    st = _scrub(st)
     json.dump(st, open(path + ".tmp", "w"), default=float)
     os.replace(path + ".tmp", path)
     return st
@@ -104,19 +205,30 @@ SCAN_TIMEOUT_S = int(os.environ.get("BEVELL3D_SCAN_TIMEOUT", "1200"))
 AGENT_TIMEOUT_S = int(os.environ.get("BEVELL3D_AGENT_TIMEOUT", "1800"))
 
 
-def friendly(e):
+def friendly(e, own_key=False):
     """What the person sees. Our own refusals (ValueError) are written for people; anything else
-    is ours to fix, so it says so, and the detail stays in the status file."""
+    is ours to fix, so it says so, and the detail stays in the status file. On an own key, the
+    Meta Model API refusing it is theirs to fix, so that says so instead."""
     if isinstance(e, ValueError) and str(e):
-        return str(e)
+        return _scrub(str(e))
+    status = getattr(getattr(e, "response", None), "status_code", None)
+    if own_key and status in (401, 403):
+        return "The Meta Model API turned your key down. Check it and try again."
+    if own_key and status in (402, 429):
+        return "The Meta Model API says your key is out of credit or over its rate limit. Try again later."
     return "Something went wrong on our side. Try again; if it happens again, tell us."
 
 
-def _scan_child(scan_id, paths, scans_dir):
-    """The pipeline in a process of its own (spawned), writing its progress to status.json."""
+def _detail(e):
+    return _scrub(f"{type(e).__name__}: {e}")[:500]              # masked before it is cut short
+
+
+def _scan_child(scan_id, paths, scans_dir, key=None, sam3d=True):
+    """The pipeline in a process of its own (spawned), writing its progress to status.json.
+    `key`: the visitor's own Meta Model API key, when the run is on theirs."""
     global SCANS
     SCANS = scans_dir
-    from bevell3d.run import run
+    _use_key(key)
     started = time.time()
     done = []
 
@@ -127,32 +239,39 @@ def _scan_child(scan_id, paths, scans_dir):
         _status(scan_id, stage=stage, detail=detail, done=done, elapsed=round(time.time() - started, 1))
 
     try:
+        from bevell3d.run import run
         tool = json.load(open(os.path.join(SCANS, scan_id, "status.json"))).get("mode") == "gripper"
-        summary = run(paths, os.path.join(SCANS, scan_id, "result"), log=lambda *a: None, progress=progress, tool=tool)
+        summary = run(paths, os.path.join(SCANS, scan_id, "result"), log=lambda *a: None, progress=progress, tool=tool,
+                      use_sam3d=sam3d)
         _status(scan_id, state="done", stage="done", elapsed=round(time.time() - started, 1), summary=summary)
     except Exception as e:
         traceback.print_exc()
-        _status(scan_id, state="failed", error=friendly(e), error_detail=f"{type(e).__name__}: {e}"[:500],
+        _status(scan_id, state="failed", error=friendly(e, bool(key)), error_detail=_detail(e),
                 elapsed=round(time.time() - started, 1))
+    finally:
+        _sweep(os.path.join(SCANS, scan_id))
 
 
-def _agent_child(scan_id, scans_dir):
+def _agent_child(scan_id, scans_dir, key=None):
     global SCANS
     SCANS = scans_dir
-    from bevell3d.agent_cad import run_agent
+    _use_key(key)
     res = os.path.join(SCANS, scan_id, "result")
     started = time.time()
 
     def log(msg):
-        _status(scan_id, agent={"state": "running", "detail": str(msg)[:160], "elapsed": round(time.time() - started)})
+        _status(scan_id, agent={"state": "running", "detail": _scrub(str(msg))[:160], "elapsed": round(time.time() - started)})
 
     log("Muse Spark is writing the CAD")
     try:
+        from bevell3d.agent_cad import run_agent
         rep = run_agent(res, rounds=2, log=log)
         _status(scan_id, agent={"state": "done", "report": rep, "elapsed": round(time.time() - started)})
     except Exception as e:
         traceback.print_exc()
-        _status(scan_id, agent={"state": "failed", "error": friendly(e), "error_detail": f"{type(e).__name__}: {e}"[:500]})
+        _status(scan_id, agent={"state": "failed", "error": friendly(e, bool(key)), "error_detail": _detail(e)})
+    finally:
+        _sweep(os.path.join(SCANS, scan_id))
 
 
 def _in_child(target, args, timeout, on_stop):
@@ -173,7 +292,7 @@ def _in_child(target, args, timeout, on_stop):
         on_stop(f"exit {p.exitcode}")
 
 
-def _work(scan_id, paths, target=None, timeout=None):
+def _work(scan_id, paths, key=None, sam3d=True, target=None, timeout=None):
     started = time.time()
     with lock:                                   # one scan at a time per container
         _status(scan_id, state="running", stage="plan", detail="starting", started=started)
@@ -186,20 +305,20 @@ def _work(scan_id, paths, target=None, timeout=None):
                     error="That scan took too long, so it was stopped. Try again with sharp photos of one object; "
                           "if it happens again, tell us." if why == "timeout" else
                           "The scan stopped unexpectedly. Try again; if it happens again, tell us.")
-        _in_child(target or _scan_child, (scan_id, paths, SCANS), timeout or SCAN_TIMEOUT_S, stopped)
+        _in_child(target or _scan_child, (scan_id, paths, SCANS, key, sam3d), timeout or SCAN_TIMEOUT_S, stopped)
 
 
 @app.get("/api/config")
 def config():
-    return {"passcode": bool(PASSCODE), "daily_cap": DAILY_CAP}
+    return {"passcode": bool(PASSCODE), "daily_cap": DAILY_CAP, "byok": True, "byok_daily_cap": BYOK_DAILY_CAP}
 
 
 @app.post("/api/scans")
 async def create_scan(request: Request, photos: list[UploadFile] = File(...), mode: str = Form("scan")):
-    _check_access(request)
+    key = _check_access(request)
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")
-    _count_run()
+    _count_run(own_key=bool(key))
     scan_id = uuid.uuid4().hex[:12]
     up = os.path.join(SCANS, scan_id, "upload")
     os.makedirs(up)
@@ -213,7 +332,7 @@ async def create_scan(request: Request, photos: list[UploadFile] = File(...), mo
             shutil.copyfileobj(f.file, out)
         paths.append(p)
     _status(scan_id, state="queued", stage="queued", photos=len(paths), created=time.time(), mode="gripper" if mode == "gripper" else "scan")
-    threading.Thread(target=_work, args=(scan_id, paths), daemon=True).start()
+    threading.Thread(target=_work, args=(scan_id, paths, key, BYOK_SAM3D if key else True), daemon=True).start()
     return {"id": scan_id}
 
 
@@ -241,7 +360,7 @@ def scan_file(scan_id: str, name: str):
     return FileResponse(p, media_type=FILES[name][1], filename=f"bevell-{scan_id}-{name}")
 
 
-def _agent(scan_id):
+def _agent(scan_id, key=None):
     with lock:
         def stopped(why):
             st = json.load(open(os.path.join(SCANS, scan_id, "status.json")))
@@ -250,19 +369,20 @@ def _agent(scan_id):
             _status(scan_id, agent={"state": "failed", "error_detail": why,
                                     "error": "Writing the CAD took too long, so it was stopped. Try again." if why == "timeout"
                                     else "Writing the CAD stopped unexpectedly. Try again."})
-        _in_child(_agent_child, (scan_id, SCANS), AGENT_TIMEOUT_S, stopped)
+        _in_child(_agent_child, (scan_id, SCANS, key), AGENT_TIMEOUT_S, stopped)
 
 
 @app.post("/api/scans/{scan_id}/agent")
 def start_agent(scan_id: str, request: Request):
-    """Muse Spark writes the object as an editable CAD program; the photos tune and check it."""
-    _check_access(request)
+    """Muse Spark writes the object as an editable CAD program; the photos tune and check it. On
+    an own key, the request brings it again: the scan's was never kept."""
+    key = _check_access(request)
     res = os.path.join(SCANS, scan_id, "result")
     if not ID.match(scan_id) or not os.path.exists(os.path.join(res, "views.pkl")):
         raise HTTPException(404, "That scan has no photos to check CAD against.")
-    _count_run()
+    _count_run(own_key=bool(key))
     _status(scan_id, agent={"state": "queued", "detail": "starting"})
-    threading.Thread(target=_agent, args=(scan_id,), daemon=True).start()
+    threading.Thread(target=_agent, args=(scan_id, key), daemon=True).start()
     return {"ok": True}
 
 

@@ -1,10 +1,11 @@
 """The web app's API as a user (or a curious judge) would poke at it, without starting a scan."""
-import io, json, os, time
+import io, json, os, sys, time, types
 import pytest
 from fastapi.testclient import TestClient
 import webapp.server as server
 
 JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")   # a tiny JPEG-shaped file
+KEY = "test-key-123"                                                     # a visitor's own Meta Model API key
 
 
 @pytest.fixture
@@ -12,11 +13,14 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "SCANS", str(tmp_path))
     monkeypatch.setattr(server, "PASSCODE", "")
     monkeypatch.setattr(server, "DAILY_CAP", 0)
-    started = []
-    monkeypatch.setattr(server, "_work", lambda scan_id, paths: started.append((scan_id, paths)))
+    monkeypatch.setattr(server, "BYOK_DAILY_CAP", 200)
+    monkeypatch.setattr(server, "BYOK_SAM3D", True)
+    started, agents = [], []
+    monkeypatch.setattr(server, "_work", lambda scan_id, paths, key=None, sam3d=True: started.append((scan_id, paths, key, sam3d)))
+    monkeypatch.setattr(server, "_agent", lambda scan_id, key=None: agents.append((scan_id, key)))
     monkeypatch.setattr(server.threading, "Thread", lambda target, args, daemon: type("T", (), {"start": lambda self: target(*args)})())
     c = TestClient(server.app)
-    c.started = started
+    c.started, c.agents = started, agents
     return c
 
 
@@ -25,7 +29,7 @@ def photos(n, name="IMG_{:02d}.jpg"):
 
 
 def test_open_by_default_and_says_so(client):
-    assert client.get("/api/config").json() == {"passcode": False, "daily_cap": 0}
+    assert client.get("/api/config").json() == {"passcode": False, "daily_cap": 0, "byok": True, "byok_daily_cap": 200}
 
 
 @pytest.mark.parametrize("n", [0, 1, 7, 41])
@@ -133,3 +137,170 @@ def test_a_scan_that_hangs_or_crashes_ends_itself_not_the_server(tmp_path, monke
     assert st["state"] == "failed" and says in st["error"] and time.time() - t < 30, st
     assert server.lock.acquire(timeout=1)                 # the next scan is not blocked
     server.lock.release()
+
+
+# ---------- a visitor's own Meta Model API key ----------
+
+def own(key=KEY):
+    return {"x-model-api-key": key}
+
+
+class Refused(Exception):
+    """What requests raises when the Meta Model API turns a key down, quoting it as an API might."""
+    response = types.SimpleNamespace(status_code=401)
+
+
+def test_with_a_passcode_set_no_passcode_and_no_key_is_refused(client, monkeypatch):
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    r = client.post("/api/scans", files=photos(8))
+    assert r.status_code == 401 and "own Meta Model API key" in r.json()["detail"] and not client.started
+
+
+def test_an_own_key_alone_is_let_in_and_handed_to_the_run_in_memory(client, monkeypatch):
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    r = client.post("/api/scans", files=photos(8), headers=own())
+    assert r.status_code == 200 and client.started[0][0] == r.json()["id"] and client.started[0][2] == KEY
+    # The passcode still lets a run in on its own, on our key.
+    assert client.post("/api/scans", files=photos(8), headers={"x-passcode": "sheet-1234"}).status_code == 200
+    assert client.started[1][2] is None
+
+
+@pytest.mark.parametrize("key", ["test key 123", "test-key-123\t", "x" * 513, "short", b"t\xe9st-key-123"])
+def test_a_malformed_key_is_refused_before_anything_runs(client, monkeypatch, key):
+    monkeypatch.setattr(server, "BYOK_DAILY_CAP", 1)
+    r = client.post("/api/scans", files=photos(8), headers=own(key))
+    assert r.status_code == 400 and "doesn't look right" in r.json()["detail"] and not client.started
+    assert client.post("/api/scans", files=photos(8), headers=own()).status_code == 200      # no run was used up
+
+
+def test_the_key_is_never_written_down_or_sent_back(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    r = client.post("/api/scans", files=photos(8), headers=own())
+    sid, bodies = r.json()["id"], [r.text]
+    (tmp_path / sid / "result").mkdir()
+    (tmp_path / sid / "result" / "views.pkl").write_bytes(b"")
+    for r in (client.get(f"/api/scans/{sid}"), client.post(f"/api/scans/{sid}/agent", headers=own()),
+              client.get(f"/api/scans/{sid}"), client.get("/api/config"), client.get("/api/examples")):
+        assert r.status_code == 200
+        bodies.append(r.text)
+    assert client.agents == [(sid, KEY)]                 # the agent request brings its own, in memory
+    assert not any(KEY in b for b in bodies)
+    written = [p for p in tmp_path.rglob("*") if p.is_file()]
+    assert {"status.json", "_usage.json"} <= {p.name for p in written}
+    assert not any(KEY.encode() in p.read_bytes() for p in written)
+
+
+def test_own_key_runs_have_a_cap_of_their_own(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    monkeypatch.setattr(server, "DAILY_CAP", 1)
+    monkeypatch.setattr(server, "BYOK_DAILY_CAP", 2)
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    (tmp_path / "_usage.json").write_text(json.dumps({"2026-01-01": 9, "own-key 2026-01-01": 9}))   # old days go
+    ours = {"x-passcode": "sheet-1234"}
+    assert client.post("/api/scans", files=photos(8), headers=ours).status_code == 200
+    assert client.post("/api/scans", files=photos(8), headers=ours).status_code == 429        # ours are used up
+    assert client.post("/api/scans", files=photos(8), headers=own()).status_code == 200       # theirs are not
+    assert client.post("/api/scans", files=photos(8), headers=own()).status_code == 200
+    r = client.post("/api/scans", files=photos(8), headers=own())
+    assert r.status_code == 429 and "own keys" in r.json()["detail"] and "tomorrow" in r.json()["detail"]
+    assert json.loads((tmp_path / "_usage.json").read_text()) == {today: 1, f"own-key {today}": 2}
+    assert len(client.started) == 3 and client.get("/api/config").json()["byok_daily_cap"] == 2
+
+
+def test_sam3d_runs_on_an_own_key_unless_turned_off(client, monkeypatch):
+    client.post("/api/scans", files=photos(8), headers=own())
+    monkeypatch.setattr(server, "BYOK_SAM3D", False)
+    client.post("/api/scans", files=photos(8), headers=own())
+    client.post("/api/scans", files=photos(8))                                                  # ours keeps it
+    assert [(k, s) for _, _, k, s in client.started] == [(KEY, True), (KEY, False), (None, True)]
+
+
+def test_config_says_an_own_key_works_beside_the_passcode(client, monkeypatch):
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    c = client.get("/api/config").json()
+    assert c["passcode"] is True and c["byok"] is True and "Sheet" not in json.dumps(c)
+
+
+def test_an_own_key_turned_down_by_the_api_is_said_to_be_theirs():
+    assert "turned your key down" in server.friendly(Refused("401"), own_key=True)
+    assert "on our side" in server.friendly(Refused("401"))         # on our key, that is ours to fix
+
+
+@pytest.fixture
+def child(tmp_path, capsys, monkeypatch):
+    """A run's own process, run here: everything it sets is put back afterwards."""
+    monkeypatch.setattr(server, "SCANS", str(tmp_path))
+    monkeypatch.setattr(server, "_SECRET", "")
+    monkeypatch.setenv("MODEL_API_KEY", "our-key-0000")
+    monkeypatch.setattr(sys, "stdout", sys.stdout)
+    monkeypatch.setattr(sys, "stderr", sys.stderr)
+    sam = types.ModuleType("bevell3d.sam_client"); sam.KEY = "our-key-0000"      # as if imported already
+    monkeypatch.setitem(sys.modules, "bevell3d.sam_client", sam)
+    (tmp_path / "abcd1234" / "result").mkdir(parents=True)
+    server._status("abcd1234", state="queued", mode="scan")
+    return tmp_path / "abcd1234", sam, capsys
+
+
+def fake_module(name, **funcs):
+    """A bevell3d module that notes what MODEL_API_KEY was when the import reached it."""
+    m = types.ModuleType(name); m.seen = {}
+
+    def reached(attr):
+        if attr not in funcs:
+            raise AttributeError(attr)
+        m.seen["env"] = os.environ.get("MODEL_API_KEY")
+        return funcs[attr]
+    m.__getattr__ = reached
+    return m
+
+
+def test_the_scan_child_runs_on_the_key_and_masks_it_everywhere(child, monkeypatch):
+    folder, sam, capsys = child
+    got = {}
+
+    def run(paths, out, log, progress, tool, use_sam3d):
+        got.update(env=os.environ["MODEL_API_KEY"], sam3d=use_sam3d)
+        progress("plan", f"asking with {KEY}")
+        json.dump({"sam3d_error": f"Bearer {KEY}"}, open(os.path.join(out, "summary.json"), "w"))
+        print("calling the API with", KEY)
+        raise Refused(f"401 Unauthorized: invalid key {KEY!r}")
+    mod = fake_module("bevell3d.run", run=run)
+    monkeypatch.setitem(sys.modules, "bevell3d.run", mod)
+    server._scan_child("abcd1234", [], str(folder.parent), KEY, False)
+    assert mod.seen["env"] == KEY and got == {"env": KEY, "sam3d": False} and sam.KEY == KEY
+    st = json.load(open(folder / "status.json"))
+    assert st["state"] == "failed" and "turned your key down" in st["error"] and "*" * len(KEY) in st["error_detail"]
+    printed = capsys.readouterr()
+    assert "Refused" in printed.err and "calling the API with" in printed.out      # printed, masked
+    assert KEY not in printed.out + printed.err
+    assert not any(KEY.encode() in p.read_bytes() for p in folder.rglob("*") if p.is_file())
+
+
+def test_the_agent_child_runs_on_its_own_key_and_masks_it(child, monkeypatch):
+    folder, sam, capsys = child
+    shown = []
+
+    def run_agent(res, rounds, log):
+        log(f"Muse Spark: bad key {KEY}")
+        shown.append((folder / "status.json").read_text())
+        raise Refused(f"Bearer {KEY}")
+    mod = fake_module("bevell3d.agent_cad", run_agent=run_agent)
+    monkeypatch.setitem(sys.modules, "bevell3d.agent_cad", mod)
+    server._agent_child("abcd1234", str(folder.parent), KEY)
+    st = json.load(open(folder / "status.json"))
+    assert mod.seen["env"] == KEY and st["agent"]["state"] == "failed" and "your key" in st["agent"]["error"]
+    assert "bad key" in shown[0] and KEY not in shown[0] + json.dumps(st) + "".join(capsys.readouterr())
+
+
+def test_the_key_reaches_a_spawned_run_as_an_argument_and_goes_no_further(tmp_path, monkeypatch, capfd):
+    from tests import _children
+    monkeypatch.setattr(server, "SCANS", str(tmp_path))
+    (tmp_path / "abcd1234").mkdir()
+    server._status("abcd1234", state="queued")
+    server._work("abcd1234", [], key=KEY, sam3d=False, target=_children.keyed, timeout=60)
+    st = json.load(open(tmp_path / "abcd1234" / "status.json"))
+    assert st["got_key"] is True and st["sam3d"] is False and "*" * len(KEY) in st["echo"], st
+    assert os.environ.get("MODEL_API_KEY") != KEY                         # this process never had it
+    printed = capfd.readouterr()
+    assert "calling the API with" in printed.out and KEY not in printed.out + printed.err
+    assert not any(KEY.encode() in p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
