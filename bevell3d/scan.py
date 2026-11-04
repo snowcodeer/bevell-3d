@@ -111,6 +111,7 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
     report = {
         "photos": len(prepared), "posed": len(views),
         "skipped": sorted({n for n, _, _ in prepared} - {v["name"] for v in views}),
+        "unreadable": json.load(open(os.path.join(out_dir, "photos", "unreadable.json"))) if os.path.exists(os.path.join(out_dir, "photos", "unreadable.json")) else [],
         "focal_px": round(float(K[0, 0]), 1), "calibration_rms_px": None if rms is None else round(rms, 3),
         "marker_error_px": {v["name"]: round(v["err_px"], 2) for v in views},
         "extents_mm": [round(float(x), 1) for x in mesh.bounds[1] - mesh.bounds[0]],

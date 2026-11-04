@@ -5,8 +5,8 @@ robot's camera where the fixture is, so it knows where the part is and how to pi
   wide enough for a jaw and deep enough that the pads reach the part at the grasp height.
 - A low tab at one end of the holder carries a 30 mm recess for a printed ArUco tag (4x4,
   id 40 by default, outside the capture sheet's 0 to 21). `tag.pdf` prints it at size.
-- `fixture.json` gives the pick in the tag's frame: origin at the tag's centre on the tab's top,
-  x from the tag towards the part, z up. A robot that
+- `fixture.json` gives the pick in the marker's own frame (OpenCV's): origin at its centre, x to
+  its right, y to its top edge, which goes towards the part, z up. A robot that
   detects the tag (cv2.aruco, camera intrinsics) composes its pose with these numbers.
 
     python -m bevell3d.fixture <scan result dir>     # writes fixture.step/.stl/.3mf, fixture.json, tag.pdf
@@ -48,7 +48,9 @@ def fixture_cad(mesh, pad=PadParams(), hp=HolderParams(), tag_id=TAG_ID):
     # The pick, in the tag's frame: origin at the tag centre on the recess floor, x from the tag
     # towards the part, z up. The part sits on the pocket floor, so its base is at hp.floor.
     tag_origin = np.r_[tab_c, tab_h - 0.6]
-    x_axis = np.r_[-u2, 0.0]; z_axis = np.array([0.0, 0.0, 1.0]); y_axis = np.cross(z_axis, x_axis)
+    # The marker's own frame (OpenCV's): x to its right, y to its top edge, z out of it. The
+    # sticker goes in with its top edge towards the part, as tag.pdf says, so y points there.
+    y_axis = np.r_[-u2, 0.0]; z_axis = np.array([0.0, 0.0, 1.0]); x_axis = np.cross(y_axis, z_axis)
     R = np.vstack([x_axis, y_axis, z_axis])                # rows: tag axes in the holder frame
     base_shift = hp.floor - float(mesh.bounds[0][2])       # the part is seated on the floor
     grasp_pt = np.r_[centre[:2], centre[2] + base_shift]
@@ -57,7 +59,8 @@ def fixture_cad(mesh, pad=PadParams(), hp=HolderParams(), tag_id=TAG_ID):
     width = float(np.ptp((mesh.vertices[:, :2] - centre[:2]) @ dvec[:2]))
     report = {
         "tag": {"dictionary": TAG_DICT, "id": tag_id, "size_mm": TAG_MM,
-                "frame": "origin at the tag's centre, x from the tag towards the part, z up, millimetres"},
+                "frame": "the marker's own (OpenCV): origin at its centre, x to its right, y to its top edge (towards the part), z up; mm",
+                "stick": "top edge of the printed tag towards the part"},
         "grasp": {"centre_mm": to_tag(grasp_pt), "squeeze_axis": squeeze, "approach": [0.0, 0.0, -1.0],
                   "jaw_open_mm": round(width + 2 * (pad.thickness + 8.0), 1),
                   "jaw_closed_on_part_mm": round(width + 2 * (pad.clearance + pad.thickness), 1),
@@ -84,6 +87,9 @@ def tag_page(tag_id=TAG_ID, size_mm=TAG_MM, dpi=600):
     page.paste(Image.fromarray(marker), (x0, y0))
     d = ImageDraw.Draw(page)
     d.rectangle([x0 - 2, y0 - 2, x0 + px + 2, y0 + px + 2], outline=180)
+    cx, top = x0 + px // 2, y0 - int(3 / 25.4 * dpi)            # an arrow over the top edge
+    d.polygon([(cx, top - int(6 / 25.4 * dpi)), (cx - int(4 / 25.4 * dpi), top), (cx + int(4 / 25.4 * dpi), top)], fill=0)
+    d.text((cx + int(6 / 25.4 * dpi), top - int(5 / 25.4 * dpi)), "this edge towards the part", fill=0)
     d.text((x0, y0 + px + int(4 / 25.4 * dpi)), f"Bevell fixture tag {TAG_DICT} id {tag_id}, {size_mm:.0f} mm. Print at 100%, cut on the grey line.", fill=0)
     return page
 
