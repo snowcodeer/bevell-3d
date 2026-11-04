@@ -28,3 +28,16 @@ def test_a_scanned_blob_becomes_nurbs_within_a_tenth_of_a_millimetre(tmp_path):
     solid, rep = scan_to_nurbs(path, str(tmp_path / "blob.step"))
     assert rep["valid"] and abs(rep["volume_cm3"] / rep["scan_volume_cm3"] - 1) < 0.01, rep
     assert rep["off_scan_mean_mm"] < 0.1, rep
+
+
+def test_holes_are_filled_and_one_subdivision_makes_every_face_a_quad():
+    from bevell3d.nurbs import fill_holes, catmull_clark
+    V, F = _cube_quads()
+    open_cube = F[:-1]                               # one face missing: a four-edge hole
+    polys = fill_holes(open_cube)
+    assert len(polys) == 7                           # the hole closed by two triangles
+    V2, Q = catmull_clark(V, polys)
+    assert Q.shape[1] == 4 and len(Q) == 5 * 4 + 2 * 3
+    edges = np.sort(np.r_[Q[:, [0, 1]], Q[:, [1, 2]], Q[:, [2, 3]], Q[:, [3, 0]]], axis=1)
+    _, counts = np.unique(edges, axis=0, return_counts=True)
+    assert (counts == 2).all()                       # closed and manifold

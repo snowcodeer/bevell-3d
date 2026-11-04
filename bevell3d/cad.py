@@ -194,6 +194,43 @@ def clean_body(mesh, cells=150):
     return mc
 
 
+def solidify(mesh, cells=160, min_cavity=0.3, close_mm=6.5):
+    """A scan that is a shell open underneath, filled into the solid it stands for.
+
+    SAM 3D sometimes returns a shell: the mouse came back as walls open at the bottom, 31 cm3
+    where the solid is about 190, and that hollow went on into model.stl, the STEP and the
+    NURBS. The object rests on the sheet, so any space the object and the sheet enclose
+    together is inside it: the sheet is added as a floor, gaps up to `close_mm` are closed,
+    enclosed space is filled, and the floor is kept only under what was filled. A mug stays
+    open at the top, and the space between a clock's legs stays empty. A mesh whose enclosed
+    cavity is under `min_cavity` of its own volume is returned as it is; a filled one is rebuilt
+    by marching cubes at `cells` across."""
+    from scipy import ndimage
+    pitch = float(max(mesh.extents)) / cells
+    vox = mesh.voxelized(pitch).fill()
+    r = int(np.ceil(close_mm / pitch)); pad = r + 2
+    m = np.pad(vox.matrix, pad)
+    lo = int(np.argmax(m.any(axis=(0, 1))))         # the lowest occupied layer: the sheet
+    floor = m.copy(); floor[:, :, lo] |= ndimage.binary_fill_holes(m.any(axis=2))
+    # The mouse's shell also had slits in its side, 1.6 mm wide and 6.2 at most, through which
+    # its inside reached the outside; closing first seals gaps up to `close_mm`.
+    closed = ndimage.binary_closing(floor, structure=ndimage.iterate_structure(ndimage.generate_binary_structure(3, 1), r))
+    filled = ndimage.binary_fill_holes(closed | m)
+    filled[:, :, lo] = m[:, :, lo] | (filled[:, :, lo] & filled[:, :, lo + 1])
+    # Decide on the enclosed cavity, not the gain: closing also fills the gaps between Mario's
+    # arms and body (gain 1.12), which are not enclosed; the mouse's inside is (gain 3.8).
+    cavity = (filled & ~closed).sum() / max(m.sum(), 1)
+    gain = filled.sum() / max(m.sum(), 1)
+    if cavity < min_cavity:
+        return mesh, {"filled": False, "cavity": round(float(cavity), 2)}
+    vg = trimesh.voxel.VoxelGrid(filled, transform=vox.transform @ trimesh.transformations.translation_matrix([-pad, -pad, -pad]))
+    out = vg.marching_cubes
+    out.apply_transform(vg.transform)
+    trimesh.smoothing.filter_taubin(out, lamb=0.5, nu=-0.53, iterations=15)
+    out.apply_translation((0, 0, mesh.bounds[0][2] - out.bounds[0][2]))
+    return out, {"filled": True, "cavity": round(float(cavity), 2), "volume_cm3": [round(float(mesh.volume) / 1000, 1), round(float(out.volume) / 1000, 1)]}
+
+
 def main_body(mesh):
     """The largest connected piece: SAM 3D meshes carry small loose parts (a scroll wheel)."""
     parts = mesh.split(only_watertight=False)

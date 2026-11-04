@@ -41,3 +41,17 @@ def test_a_round_footprint_gets_a_true_circle_and_every_edge_treatment():
     assert info["valid"] and info["dfm"]["outline"] == "circle", info
     assert all(isinstance(info["dfm"][k], float) for k in ("lead_in_chamfer_mm", "top_fillet_mm", "foot_chamfer_mm", "notch_fillet_mm")), info["dfm"]
     assert abs(info["pocket_outline_mm"][0] - 60.8) < 0.5, info   # 0.2 mm raster
+
+
+def test_a_shell_open_underneath_is_filled_and_an_open_top_mug_is_not():
+    from bevell3d.cad import solidify
+    outer = trimesh.creation.box((80, 50, 30)); outer.apply_translation((150, 105, 15))
+    inner = trimesh.creation.box((72, 42, 28)); inner.apply_translation((150, 105, 13))   # open at the bottom
+    shell = trimesh.boolean.difference([outer, inner], engine="manifold")
+    filled, rep = solidify(shell)
+    assert rep["filled"] and abs(filled.volume / outer.volume - 1) < 0.06, (rep, filled.volume / outer.volume)
+    mug_out = trimesh.creation.cylinder(radius=40, height=90, sections=64); mug_out.apply_translation((150, 105, 45))
+    mug_in = trimesh.creation.cylinder(radius=35, height=90, sections=64); mug_in.apply_translation((150, 105, 50))  # open at the top
+    mug = trimesh.boolean.difference([mug_out, mug_in], engine="manifold")
+    same, rep = solidify(mug)
+    assert not rep["filled"] and same is mug, rep

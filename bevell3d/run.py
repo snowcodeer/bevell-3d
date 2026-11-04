@@ -108,6 +108,9 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
         except Exception as e:                       # the hull still stands; say why
             summary["sam3d_error"] = f"{type(e).__name__}: {e}"
             log("SAM 3D skipped:", summary["sam3d_error"])
+    # A shell open underneath (SAM 3D's mouse) is filled into the solid it stands for.
+    from .cad import solidify
+    final, summary["solidified"] = solidify(final)
     final.export(os.path.join(out_dir, "model.stl"))
     holder_base = hull if summary["hull_agreement"] >= HULL_HOLDER_AGREEMENT else final
     # The nest follows the object's underside, on a voxel grid; kept as an alternative print.
