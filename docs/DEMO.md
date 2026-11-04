@@ -64,6 +64,10 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
   39.2 × 18.8 × 36.9 mm (true 40.7 × 19.7 × 37), ears 52.9 long at 27.0 up (54.5 at 26.5),
   boss ⌀12.5 at 10.2 off-centre (⌀13 at 10.35), four holes, 12 named parameters, 0.59 mm from
   the true surface. Open its Fusion script and change `flange_z` or `hole_d` on camera.
+- Turntables, 5 s at 1080p: `./tools/make_broll.sh` renders `out/broll/servo_scan_and_tree.mp4`
+  (the servo's scanned NURBS in grey beside Muse Spark's editable tree in blue: use it under
+  "Not a mesh: real CAD") and `out/broll/servo_fixture.mp4` (the fixture with the servo seated
+  and the tag in its recess: under the robot lines). Any scan folder works as its argument.
 - The examples on the start screen cover each kind: Vitamin bottle and Tape roll (revolve),
   Bracket (sketch + extrude from the scan), Hobby servo, Gear, Mug and Alarm clock (smooth
   NURBS, each with Muse Spark's tree: the mug's handle, the gear's teeth), Mario and Fish
