@@ -64,7 +64,7 @@ def agreement(mesh, views, masks, size):
     return float(np.mean([iou(silhouette(mesh, v, size), m) for v, m in zip(views, masks)]))
 
 
-def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings, t0, log=print, progress=lambda stage, detail="": None):
+def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings, t0, log=print, progress=lambda stage, detail="": None, tool=False):
     """Everything made from the final model: the CAD, the holders, the gripper pads, the
     renders and summary.json. Split from run() so a finished scan can be made again after a
     change to these steps without new photos or model calls (recad)."""
@@ -134,7 +134,7 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
         summary["fixture_error"] = f"{type(e).__name__}: {e}"
     # A hand tool lying flat (scissors, pliers): fingers that let the SO-101 hold it and work it.
     # Only for flat objects, so the handle of a mug seen from above never reads as two handles.
-    if float(final.extents[2]) <= 0.2 * float(max(final.extents[:2])):
+    if tool or float(final.extents[2]) <= 0.2 * float(max(final.extents[:2])):
         try:
             from .tool_fingers import write_tool_fingers, top_outline
             vpath = os.path.join(out_dir, "views.pkl")
@@ -145,8 +145,9 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
             tf = write_tool_fingers(out_dir, final, outline=outline)
             summary["tool_fingers"] = {"jaw_gap_mm": tf["jaw_gap_tool_closed_mm"], "grip_mm": [s["width_mm"] for s in tf["saddles"]],
                                        "loops": all(s["loop"] for s in tf["saddles"]), "outline_from": tf["outline_from"]}
-        except ValueError:
-            pass                                   # no two handles side by side: not a tool
+        except ValueError as e:                    # no two handles side by side: not a tool
+            if tool:
+                summary["tool_fingers_why"] = str(e)
         except Exception as e:
             summary["tool_fingers_error"] = f"{type(e).__name__}: {e}"
     timings["total"] = round(time.time() - t0, 1)
@@ -178,7 +179,7 @@ def recad(out_dir, log=print):
     return summary
 
 
-def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=lambda stage, detail="": None):
+def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=lambda stage, detail="": None, tool=False):
     import time
     os.makedirs(out_dir, exist_ok=True)
     timings, t0, t = {}, time.time(), time.time()
@@ -226,7 +227,7 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
     from .cad import solidify
     final, summary["solidified"] = solidify(final)
     final.export(os.path.join(out_dir, "model.stl"))
-    make_outputs(out_dir, final, hull, plan, summary, source, len(photo_paths), timings, t0, log, progress)
+    make_outputs(out_dir, final, hull, plan, summary, source, len(photo_paths), timings, t0, log, progress, tool=tool)
     log(f"done: model from {source}, {summary['model_mm']} mm; holder {summary['holder']['holder_mm']} mm -> {out_dir}")
     return summary
 

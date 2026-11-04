@@ -7,7 +7,7 @@ Scans live under out/scans/<id>/: the uploads, every pipeline output, and status
 which the page polls. One scan runs at a time per process; a second waits its turn.
 """
 import json, os, re, shutil, threading, time, traceback, uuid
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -116,7 +116,8 @@ def _scan_child(scan_id, paths, scans_dir):
         _status(scan_id, stage=stage, detail=detail, done=done, elapsed=round(time.time() - started, 1))
 
     try:
-        summary = run(paths, os.path.join(SCANS, scan_id, "result"), log=lambda *a: None, progress=progress)
+        tool = json.load(open(os.path.join(SCANS, scan_id, "status.json"))).get("mode") == "gripper"
+        summary = run(paths, os.path.join(SCANS, scan_id, "result"), log=lambda *a: None, progress=progress, tool=tool)
         _status(scan_id, state="done", stage="done", elapsed=round(time.time() - started, 1), summary=summary)
     except Exception as e:
         traceback.print_exc()
@@ -183,7 +184,7 @@ def config():
 
 
 @app.post("/api/scans")
-async def create_scan(request: Request, photos: list[UploadFile] = File(...)):
+async def create_scan(request: Request, photos: list[UploadFile] = File(...), mode: str = Form("scan")):
     _check_access(request)
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")
@@ -200,7 +201,7 @@ async def create_scan(request: Request, photos: list[UploadFile] = File(...)):
         with open(p, "wb") as out:
             shutil.copyfileobj(f.file, out)
         paths.append(p)
-    _status(scan_id, state="queued", stage="queued", photos=len(paths), created=time.time())
+    _status(scan_id, state="queued", stage="queued", photos=len(paths), created=time.time(), mode="gripper" if mode == "gripper" else "scan")
     threading.Thread(target=_work, args=(scan_id, paths), daemon=True).start()
     return {"id": scan_id}
 
