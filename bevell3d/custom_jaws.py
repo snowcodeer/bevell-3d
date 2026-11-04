@@ -182,8 +182,18 @@ def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=Finge
     return new_moving, new_fixed, half_m, half_f, pv, report
 
 
-def collisions(new_moving, new_fixed, half_m, half_f, q_open=0.45, n=10):
+def _light(m, faces=6000):
+    """A simplified copy for the collision check (a quarter of a second each instead of seconds)."""
+    try:
+        s = m.simplify_quadric_decimation(face_count=faces) if len(m.faces) > faces else m
+        return s if s.is_watertight else m
+    except Exception:
+        return m
+
+
+def collisions(new_moving, new_fixed, half_m, half_f, q_open=0.45, n=6):
     """Overlap between the parts and the scissors over the gripper's working range, mm^3 (0 is clear)."""
+    new_moving, new_fixed, half_m, half_f = (_light(x) for x in (new_moving, new_fixed, half_m, half_f))
     Tf = fixed_to_gripper(); fixed_g = new_fixed.copy().apply_transform(Tf)
     worst = {"jaws": 0.0, "moving_blade_vs_fixed": 0.0, "fixed_blade_vs_moving": 0.0}
     for q in np.linspace(0, q_open, n):
@@ -234,6 +244,9 @@ def write(scan_dir, out_dir=None, log=print):
     trimesh.util.concatenate([new_moving.copy().apply_transform(moving_to_gripper(0.0)), new_fixed.copy().apply_transform(fixed_to_gripper())]).export(
         os.path.join(out_dir, "custom_jaws_preview.stl"))
     trimesh.util.concatenate([half_m, half_f]).export(os.path.join(out_dir, "custom_jaws_scissors.stl"))
+    new_moving.copy().apply_transform(moving_to_gripper(0.0)).export(os.path.join(out_dir, "custom_jaws_moving_part.stl"))
+    new_fixed.copy().apply_transform(fixed_to_gripper()).export(os.path.join(out_dir, "custom_jaws_fixed_part.stl"))
+    half_m.export(os.path.join(out_dir, "custom_jaws_moving_blade.stl")); half_f.export(os.path.join(out_dir, "custom_jaws_fixed_blade.stl"))
     rep["pivot_mm"] = pv.round(2).tolist()
     rep["collisions_mm3"] = col
     json.dump(rep, open(os.path.join(out_dir, "custom_jaws.json"), "w"), indent=1)

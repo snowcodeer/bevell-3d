@@ -605,7 +605,7 @@ async function upload() {
 const STAGES = [
   ["plan", "Reading the photos"], ["photos", "Preparing"], ["markers", "Finding the squares"],
   ["masks", "Cutting out the object"], ["hull", "Building the shape"], ["revolve", "Making the profile"],
-  ["sam3d", "Generating the full shape"], ["fit", "Sizing it"], ["cad", "CAD and holder"],
+  ["sam3d", "Generating the full shape"], ["fit", "Sizing it"], ["cad", "CAD and holder"], ["grippers", "Custom grippers"],
 ];
 const ROUTE = { flat: "Flat part", revolved: "Round, turned shape", freeform: "Freeform shape" };
 const CAD = { revolved: "Editable profile", prismatic: "Sketch + extrude", lofted: "Editable sections", nurbs: "Smooth NURBS", mesh: "Mesh in STEP" };
@@ -619,9 +619,11 @@ function makingScreen(id) {
     const r = await fetch(`/api/scans/${id}`), st = await r.json();
     if (!r.ok) { $("m-err").textContent = st.detail || "That scan can't be found."; $("m-err").hidden = false; return; }
     if (st.state === "done") { scan = st; return go("result", id); }
-    const done = new Set(st.done || []), route = st.plan?.route;
-    $("stages").innerHTML = STAGES.filter(([k]) => !(route === "revolved" && (k === "sam3d" || k === "fit")) && !(route && route !== "revolved" && k === "revolve"))
-      .map(([k, l]) => `<li class="${done.has(k) ? "done" : st.stage === k ? "active" : ""}"><span class="dot"></span><span>${l}</span></li>`).join("");
+    const done = new Set(st.done || []), route = st.plan?.route, tool = st.mode === "gripper" || st.stage === "grippers" || done.has("grippers");
+    // The current step is shown as current (with what it is doing) until the next one starts.
+    $("stages").innerHTML = STAGES.filter(([k]) => !(route === "revolved" && (k === "sam3d" || k === "fit")) && !(route && route !== "revolved" && k === "revolve")
+        && !(k === "grippers" && !tool) && !(st.mode === "gripper" && (k === "sam3d" || k === "fit")))
+      .map(([k, l]) => `<li class="${st.stage === k ? "active" : done.has(k) ? "done" : ""}"><span class="dot"></span><span>${l}${st.stage === k && st.detail ? `<small class="muted" style="display:block;font-size:12px">${esc(st.detail)}</small>` : ""}</span></li>`).join("");
     $("m-elapsed").textContent = st.state === "queued" ? "Next in line…" : `${Math.round(st.elapsed || 0)} s · usually 3–5 min`;
     if (st.plan) { $("m-plan").hidden = false; $("m-plan").innerHTML = planHTML(st.plan); }
     if (st.state === "failed") { $("m-err").textContent = `Didn't work: ${st.error}`; $("m-err").hidden = false; actions(button("Take the photos again", "primary", () => { files = []; go("shoot"); })); return; }
@@ -649,24 +651,28 @@ async function resultScreen(id) {
   actions(button(s.custom_jaws || s.tool_fingers ? "Print the custom grippers" : "Print the holder", "primary", () => go("print", id)), button("New scan", "ghost", () => { files = []; go("sheet"); }));
   const f = Object.fromEntries(st.files.map((x) => [x.name, x.url]));
   fingersCard(st, s, f);
+  const anim = s.custom_jaws && f["custom_jaws_moving_part.stl"] ? { fixedPart: f["custom_jaws_fixed_part.stl"], movingPart: f["custom_jaws_moving_part.stl"],
+    fixedBlade: f["custom_jaws_fixed_blade.stl"], movingBlade: f["custom_jaws_moving_blade.stl"], hinge: s.custom_jaws.hinge_mm, axis: s.custom_jaws.hinge_axis,
+    open: (s.custom_jaws.sim.gripper_max_deg * Math.PI) / 180 } : null;
   viewer(f["model_cad.stl"] || f["model.stl"], f["holder.stl"], s.holder?.floor_mm ?? 2, f["agent_model.stl"],
-    f["scissor_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["scissor_jaws_scissors.stl"]);
+    f["custom_jaws_preview.stl"] || f["tool_fingers_on_tool.stl"], !!s.tool_fingers, f["custom_jaws_scissors.stl"], anim);
   agentCard(id, st);
 }
 function fingersCard(st, s, f) {
   const card = $("fingers-card"), tf = s.tool_fingers, cj = s.custom_jaws;
   if (cj) {
     $("r-title").textContent = `Custom robot grippers for your ${s.plan.object}`;
-    const sim = cj.sim;
-    card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> New jaws whose fingertips go through the loops</div>
+    const sim = cj.sim, clear = Object.values(cj.collisions_mm3).every((v) => v < 1);
+    card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> The scissors' pivot on the gripper's hinge</div>
       <div class="facts"><div class="fact"><b>${sim.gripper_max_deg.toFixed(0)}° → ${sim.blades_max_deg.toFixed(0)}°</b><span>gripper to blades, tested in MuJoCo</span></div>
-      <div class="fact"><b>${sim.stays_in_hole ? "Fits" : "Check"}</b><span>moving plug slides ${Math.abs(sim.slide_mm[0]).toFixed(1)} of ${sim.slide_room_mm.toFixed(1)} mm</span></div></div>
+      <div class="fact"><b>${clear ? "Clear" : "Check"}</b><span>${clear ? "nothing touches over the stroke" : "parts touch over the stroke"}</span></div></div>
+      <p class="muted small">The 3D view above plays the simulated motion: the moving jaw turns the moving blade about the same hinge.</p>
       <ol class="steps"><li>Print the new moving jaw and wrist-roll follower (as you printed the originals).</li>
       <li>Unscrew the SO-101's own and fit these: same screws, same servo horn.</li>
-      <li>Close the gripper, close the scissors and press each loop over its plug until it snaps past the lip.</li>
-      <li>Open the gripper and the blades open with it.</li></ol>
-      <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["scissor_jaws.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["scissor_jaws.3mf"]}" download>Both parts, 3MF</a>
-      <a class="chip" href="${f["scissor_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["scissor_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a>${f["scissor_jaws_sim.xml"] ? `<a class="chip" href="${f["scissor_jaws_sim.xml"]}" download>MuJoCo model</a>` : ""}</div>`;
+      <li>Close the gripper, close the scissors and press each loop into its clip.</li>
+      <li>Open the gripper and the blades open with it, degree for degree.</li></ol>
+      <div class="examples">${COARSE ? "" : `<a class="chip" href="${bambu(f["custom_jaws.3mf"])}">Open in Bambu Studio</a>`}<a class="chip" href="${f["custom_jaws.3mf"]}" download>Both parts, 3MF</a>
+      <a class="chip" href="${f["custom_moving_jaw.stl"]}" download>Moving jaw</a><a class="chip" href="${f["custom_wrist_roll_follower.stl"]}" download>Wrist-roll follower</a>${f["custom_jaws_sim.xml"] ? `<a class="chip" href="${f["custom_jaws_sim.xml"]}" download>MuJoCo model</a>` : ""}</div>`;
     card.hidden = false;
     return;
   }
@@ -756,7 +762,7 @@ async function printScreen(id) {
 
 // ---------- 3D viewer ----------
 let three;
-async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersFirst, toolUrl) {
+async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersFirst, toolUrl, anim) {
   const canvas = $("viewer");
   if (!three) {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -768,18 +774,32 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
     three = { renderer, scene, camera, controls, group: new THREE.Group() }; scene.add(three.group);
     const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
     new ResizeObserver(resize).observe(canvas); resize();
-    (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+    (function loop(t) { controls.update(); if (three.tick) three.tick(t || 0); renderer.render(scene, camera); requestAnimationFrame(loop); })();
   }
   const get = (url, color, rough = 0.55) => new Promise((res) => url ? new STLLoader().load(url, (g) => { g = toCreasedNormals(g, Math.PI / 6); g.computeBoundingBox(); res(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05 }))); }) : res(null));
   const [model, holder, agent, fingers, tool] = await Promise.all([get(modelUrl, 0x395af6), get(holderUrl, 0xe6e6ea, 0.7), get(agentUrl, 0x8f74d6), get(fingersUrl, 0xf0c020, 0.6), get(toolUrl, 0x395af6)]);
+  // The simulated motion: the moving jaw and the moving blade turn together about the hinge.
+  let moving = null, still = null;
+  if (anim) {
+    const [fp, mp, fb, mb] = await Promise.all([get(anim.fixedPart, 0xf0c020, 0.6), get(anim.movingPart, 0xf0c020, 0.6), get(anim.fixedBlade, 0x395af6), get(anim.movingBlade, 0xc8ccd4, 0.35)]);
+    if (fp && mp && fb && mb) {
+      still = new THREE.Group(); still.add(fp, fb);
+      const h = new THREE.Vector3(...anim.hinge), pivot = new THREE.Group(); pivot.position.copy(h);
+      mp.position.sub(h); mb.position.sub(h); pivot.add(mp, mb); moving = pivot;
+      const axis = new THREE.Vector3(...anim.axis).normalize();
+      three.tick = (t) => { if (!moving.parent) return; const a = anim.open * (0.5 - 0.5 * Math.cos((t / 3000) * 2 * Math.PI)); moving.quaternion.setFromAxisAngle(axis, a); };
+    }
+  }
+  if (!anim) three.tick = null;
   document.querySelector('.seg [data-show="agent"]').hidden = !agent;
-  document.querySelector('.seg [data-show="fingers"]').hidden = !fingers;
+  document.querySelector('.seg [data-show="fingers"]').hidden = !(fingers || moving);
   const seated = model.clone(); seated.position.z = floor - model.geometry.boundingBox.min.z;
   const showIt = (what) => {
     three.group.clear();
     if (what === "model") three.group.add(model);
     if (what === "agent" && agent) three.group.add(agent);
-    if (what === "fingers" && fingers) { three.group.add(tool || model); three.group.add(fingers); }
+    if (what === "fingers" && moving) { three.group.add(still); three.group.add(moving); }
+    else if (what === "fingers" && fingers) { three.group.add(tool || model); three.group.add(fingers); }
     if (what === "holder" && holder) three.group.add(holder);
     if (what === "both") { if (holder) three.group.add(holder); three.group.add(seated); }
     const box = new THREE.Box3().setFromObject(three.group), c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length();
@@ -788,7 +808,7 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
     document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("on", b.dataset.show === what));
   };
   document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => showIt(b.dataset.show)));
-  showIt(fingers && fingersFirst ? "fingers" : "model");
+  showIt((fingers || moving) && fingersFirst ? "fingers" : "model");
 }
 
 show();

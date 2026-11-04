@@ -83,7 +83,7 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
         import cadquery as cq
         from .cad import to_cad, holder_cad_safe, to_mesh, write_dxf
         solid, kind, info, why = to_cad(final, plan["route"])
-        if kind == "mesh":
+        if kind == "mesh" and not tool:
             # Freeform: smooth NURBS patches instead of the mesh's flat triangles, when they work.
             progress("cad", "smoothing the CAD surface")
             try:
@@ -132,6 +132,7 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
         summary["fixture"] = {"tag_id": fx["tag"]["id"], "grasp_mm": fx["grasp"]["centre_mm"], "relief_mm": fx["fixture"]["relief_mm"]}
     except Exception as e:
         summary["fixture_error"] = f"{type(e).__name__}: {e}"
+    H_LIST = [20.2, 18.8, -23.4]                      # the SO-101 gripper hinge, gripper frame (mm)
     # A hand tool lying flat (scissors, pliers): fingers that let the SO-101 hold it and work it.
     # Only for flat objects, so the handle of a mug seen from above never reads as two handles.
     if tool or float(final.extents[2]) <= 0.2 * float(max(final.extents[:2])):
@@ -149,16 +150,21 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
             # the gripper's hinge, tested in MuJoCo.
             if summary["tool_fingers"]["loops"]:
                 try:
-                    # New jaws whose fingertips go through the loops (scissor_jaws.py), simulated.
-                    from .scissor_jaws import write as write_jaws
-                    cj = write_jaws(out_dir)
-                    summary["custom_jaws"] = {"fixed_jaw": cj["fixed_jaw"], "moving_jaw": cj["moving_jaw"],
-                                              "watertight": cj["parts_watertight"], "sim": cj["sim"]}
+                    # New SO-101 jaw parts, the scissors beside the gripper with their pivot on its
+                    # hinge (custom_jaws.py), then the motion in MuJoCo.
+                    progress("grippers", "designing the custom grippers for the SO-101")
+                    from .custom_jaws import write as write_jaws, simulate as simulate_jaws
+                    cj = write_jaws(out_dir, log=log)
+                    progress("grippers", "testing them in simulation")
+                    sim = simulate_jaws(out_dir)
+                    summary["custom_jaws"] = {"collisions_mm3": cj["collisions_mm3"], "arm_mm": cj["arm_mm"], "side": cj["side"],
+                                              "parts": cj["parts"], "clips": cj["clips"], "sim": sim, "hinge_mm": H_LIST,
+                                              "hinge_axis": [0.0, -1.0, 0.0]}
                 except Exception as e:
                     summary["custom_jaws_error"] = f"{type(e).__name__}: {e}"
             # Scissors: the SO-101 working them in MuJoCo sets the gripper's range and the rail the
             # moving jaw's loop slides along (the jaw's arc and the loop's arc differ).
-            if summary["tool_fingers"]["loops"]:
+            if summary["tool_fingers"]["loops"] and "custom_jaws" not in summary:
                 try:
                     from .scissors_sim import tune
                     xml, sim = tune(out_dir)
@@ -226,7 +232,7 @@ def run(photo_paths, out_dir, prompt=None, use_sam3d=True, log=print, progress=l
         log(f"revolved: height {rrep['height_mm']} mm, widest {rrep['max_diameter_mm']} mm, agreement {rrep['agreement']:.3f}")
         if rrep["agreement"] >= summary["hull_agreement"] - KEEP_MARGIN:
             final, source = rev, "revolved"
-    if use_sam3d and plan["route"] == "freeform":
+    if use_sam3d and plan["route"] == "freeform" and not tool:
         try:
             name = best_photo(views, masks, hull.bounding_box.centroid)
             i = [v["name"] for v in views].index(name)

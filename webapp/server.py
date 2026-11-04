@@ -36,13 +36,17 @@ FILES = {  # name -> (label, media type)
     "fixture.stl": ("Robot fixture, STL", "model/stl"),
     "fixture.json": ("Robot fixture: the pick in the tag's frame, JSON", "application/json"),
     "tag.pdf": ("Robot fixture tag, PDF to print at 100%", "application/pdf"),
-    "scissor_jaws.3mf": ("Custom SO-101 grippers for these scissors (both parts), 3MF", "model/3mf"),
-    "scissor_moving_jaw.stl": ("Custom SO-101 moving jaw, STL", "model/stl"),
-    "scissor_wrist_roll_follower.stl": ("Custom SO-101 wrist-roll follower (fixed jaw), STL", "model/stl"),
-    "scissor_jaws.json": ("Custom grippers: plugs, holes and the simulation, JSON", "application/json"),
-    "scissor_jaws_preview.stl": ("Custom grippers on the SO-101, preview STL", "model/stl"),
-    "scissor_jaws_scissors.stl": ("The scissors in the custom grippers, preview STL", "model/stl"),
-    "scissor_jaws_sim.xml": ("The MuJoCo model of the custom grippers working the scissors", "application/xml"),
+    "custom_jaws.3mf": ("Custom SO-101 grippers for these scissors (both parts), 3MF", "model/3mf"),
+    "custom_moving_jaw.stl": ("Custom SO-101 moving jaw, STL", "model/stl"),
+    "custom_wrist_roll_follower.stl": ("Custom SO-101 wrist-roll follower (fixed jaw), STL", "model/stl"),
+    "custom_jaws.json": ("Custom grippers: clips, arms, collision check, JSON", "application/json"),
+    "custom_jaws_preview.stl": ("Custom grippers on the SO-101, preview STL", "model/stl"),
+    "custom_jaws_scissors.stl": ("The scissors in the custom grippers, preview STL", "model/stl"),
+    "custom_jaws_moving_part.stl": ("Animation: the moving jaw", "model/stl"),
+    "custom_jaws_fixed_part.stl": ("Animation: the fixed part", "model/stl"),
+    "custom_jaws_moving_blade.stl": ("Animation: the moving half of the scissors", "model/stl"),
+    "custom_jaws_fixed_blade.stl": ("Animation: the fixed half of the scissors", "model/stl"),
+    "custom_jaws_sim.xml": ("The MuJoCo model of the custom grippers working the scissors", "application/xml"),
     "tool_fingers.3mf": ("Custom robot grippers for this tool (stick-on), 3MF", "model/3mf"),
     "tool_fingers.stl": ("Custom robot grippers for this tool (stick-on), STL", "model/stl"),
     "tool_fingers.step": ("Custom robot grippers for this tool (stick-on), STEP", "model/step"),
@@ -118,7 +122,7 @@ def _scan_child(scan_id, paths, scans_dir):
 
     def progress(stage, detail=""):
         st = json.load(open(os.path.join(SCANS, scan_id, "status.json")))
-        if st.get("stage") and st["stage"] not in done:
+        if st.get("stage") and st["stage"] != stage and st["stage"] not in done:
             done.append(st["stage"])
         _status(scan_id, stage=stage, detail=detail, done=done, elapsed=round(time.time() - started, 1))
 
