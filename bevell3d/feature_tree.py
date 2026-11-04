@@ -20,6 +20,7 @@ path in the XZ or YZ plane), shell (hollow, open at the top or not), fillet and 
 polygon [[x, y], ...]; any shape takes "at": [x, y].
 """
 import ast, json, math, operator
+import numpy as np
 
 OPS = {"revolve", "extrude", "loft", "sweep", "shell", "fillet", "chamfer"}
 EDGES = {"top", "bottom", "vertical", "all"}
@@ -169,7 +170,17 @@ def to_cadquery(tree, p):
             # while Fusion moves only that section.
             secs = sorted(s["sections"], key=lambda q: ev(q["z"], p))
             wires = [_shape_cq(cq.Workplane("XY").workplane(offset=ev(q["z"], p)), q["shape"], p).val() for q in secs]
-            combine(cq.Workplane("XY").add(_loft(wires)), mode)
+            solid = _loft(wires)
+            # A smooth loft through uneven sections can swing far outside them; Fusion then
+            # refuses it ("the loft would flow in an invalid direction"), so refuse it here too.
+            lo = np.min([[w.BoundingBox().xmin, w.BoundingBox().ymin] for w in wires], axis=0)
+            hi = np.max([[w.BoundingBox().xmax, w.BoundingBox().ymax] for w in wires], axis=0)
+            bb = solid.BoundingBox()
+            over = max(lo[0] - bb.xmin, lo[1] - bb.ymin, bb.xmax - hi[0], bb.ymax - hi[1])
+            if over > max(2.0, 0.1 * float(np.max(hi - lo))):
+                raise ValueError(f"loft {s.get('id')!r} swings {over:.0f} mm outside its sections: use 3 to 5 "
+                                 "sections whose shapes change gradually")
+            combine(cq.Workplane("XY").add(solid), mode)
         elif op == "sweep":
             pts = _path_points(s["path"], p)
             path = cq.Workplane("XY").spline(pts, includeCurrent=False) if len(pts) > 2 else cq.Workplane("XY").polyline(pts)

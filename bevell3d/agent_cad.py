@@ -177,7 +177,7 @@ TREE_BRIEF = """You are a CAD engineer. Rebuild the object in the photos as a cl
 feature tree, the kind a designer builds in Fusion 360, as JSON.
 
 Return {"features": one line, "parameters": [...], "steps": [...]}.
-Parameters: {"name", "value", "min", "max", "what"}, in millimetres or degrees, 3 to 8 of them.
+Parameters: {"name", "value", "min", "max", "what"}, in millimetres or degrees, 4 to 12 of them.
 Give each a range wide enough for the true value: an optimiser tunes the values against the
 photos, so the ranges matter more than your guesses.
 Every size in a step is a number or an expression in the parameters, as a string:
@@ -196,9 +196,16 @@ Steps, in order (the first must make a solid):
 - shell: {"id", "op": "shell", "thickness": t, "open": "top" or "none"} hollows the body.
 - fillet / chamfer: {"id", "op": "fillet", "edges": "top" | "bottom" | "vertical" | "all", "radius": r}
 SHAPE: {"circle": {"d": d}} | {"rect": {"w": w, "l": l}} | {"ellipse": {"w": w, "l": l}} |
-       {"polygon": [[x, y], ...]}, each with an optional "at": [x, y].
-Use few, real features. Do not model printing, labels or text. Keep fillet radii well below
-the edges they round.
+       {"polygon": [[x, y], ...]} | {"spline": [[x, y], ...]} (a smooth closed outline through
+       8 to 12 points, for organic sections), each with an optional "at": [x, y].
+Model it the way a designer would: the main body first, then every visible functional
+feature as its own step: buttons and the split lines between them (thin cuts), wheels, knobs,
+feet, legs, bells, bosses, ports and holes. Do not model printing, labels or text. Keep fillet
+radii well below the edges they round.
+Measured cross-sections of the scan follow, in your frame. Use them for proportions and for
+loft sections, but loft through 3 to 5 sections whose shapes change gradually; a loft through
+many uneven outlines swings outside them and is refused. Scale a section's points by your
+parameters (for example "61.5 * len / 124") so the optimiser can still adjust its size.
 
 Example, a mug:
 {"features": "revolved body, shell open at the top, swept handle",
@@ -267,10 +274,46 @@ def ask(messages, key=None, timeout=300, mode="tree"):
     return json.loads(msg["content"]), msg
 
 
-def first_messages(photo_paths, plan, extents, mode="tree"):
+def measured_sections(mesh, centre, n_levels=6, n_pts=8):
+    """The scan's cross-sections in the tree's frame: centred as the agent centres its model, X
+    along the footprint's long axis at an angle in [0, 180), a yaw the placement search reaches.
+    Each outline is smoothed to `n_pts` points; raw ones lofted badly in both kernels."""
+    from shapely.geometry import Polygon
+    xy = mesh.vertices[:, :2] - centre
+    ax = np.linalg.eigh(np.cov(xy.T))[1][:, 1]
+    theta = math.degrees(math.atan2(ax[1], ax[0])) % 180
+    c, s = math.cos(math.radians(theta)), math.sin(math.radians(theta))
+    z0, z1 = mesh.bounds[0][2], mesh.bounds[1][2]
+    out = []
+    for f in np.linspace(0.05, 0.95, n_levels):
+        z = z0 + f * (z1 - z0)
+        sec = mesh.section(plane_origin=(0, 0, z), plane_normal=(0, 0, 1))
+        if sec is None:
+            continue
+        polys = sorted(sec.to_planar(to_2D=np.eye(4))[0].polygons_full, key=lambda q: -q.area)
+        pieces = []
+        for poly in polys[:3]:
+            if poly.area < max(15.0, 0.03 * polys[0].area):   # specks come out as degenerate outlines
+                break
+            poly = Polygon(poly.exterior).buffer(2, join_style=1).buffer(-2, join_style=1).simplify(1.0)
+            ring = np.asarray(poly.exterior.coords)[:-1] - centre
+            ring = np.c_[ring[:, 0] * c + ring[:, 1] * s, -ring[:, 0] * s + ring[:, 1] * c]
+            seg = np.r_[0, np.cumsum(np.linalg.norm(np.diff(np.r_[ring, ring[:1]], axis=0), axis=1))]
+            t = np.linspace(0, seg[-1], n_pts, endpoint=False)
+            pts = np.c_[np.interp(t, seg, np.r_[ring[:, 0], ring[0, 0]]), np.interp(t, seg, np.r_[ring[:, 1], ring[0, 1]])]
+            pieces.append({"x": [round(float(ring[:, 0].min()), 1), round(float(ring[:, 0].max()), 1)],
+                           "y": [round(float(ring[:, 1].min()), 1), round(float(ring[:, 1].max()), 1)],
+                           "outline": [[round(float(x) * 2) / 2, round(float(y) * 2) / 2] for x, y in pts]})
+        out.append({"z": round(float(z - z0), 1), "pieces": pieces})
+    return theta, out
+
+
+def first_messages(photo_paths, plan, extents, mode="tree", sections=None):
     text = ((TREE_BRIEF if mode == "tree" else BRIEF) + f"\n\nThe object: {plan['object']} (planner's route: {plan['route']}).\n"
             f"Measured from the photos, its outer size is about {extents[0]:.1f} × {extents[1]:.1f} × {extents[2]:.1f} mm "
             "(width × depth × height; these are an outer bound and can run 1 to 3 mm large). "
+            + (("\nMeasured cross-sections (z, then each separate piece at that height: its x and y "
+                "range and its outline):\n" + json.dumps(sections, separators=(",", ":")) + "\n") if sections else "")
             + ("Return the feature tree." if mode == "tree" else "Return the features, the parameters and the code."))
     return [{"role": "user", "content": [{"type": "text", "text": text}] + [{"type": "image_url", "image_url": {"url": _img_url(p)}} for p in photo_paths]}]
 
@@ -312,7 +355,11 @@ def run_agent(out_dir, rounds=3, log=print, key=None, mode="tree"):
         R, _ = cv2.Rodrigues(v["rv"]); c = (-R.T @ v["tv"]).ravel() - hull.bounding_box.centroid
         elev.append(math.degrees(math.atan2(c[2], math.hypot(c[0], c[1]))))
     picks = sorted({int(np.argmin([abs(e - t) for e in elev])) for t in (45, 10, 85)})
-    messages = first_messages([photos[i] for i in picks], plan, hull.extents, mode)
+    sections = None
+    if mode == "tree":
+        model_path = os.path.join(out_dir, "model.stl")
+        _, sections = measured_sections(trimesh.load(model_path) if os.path.exists(model_path) else hull, centre)
+    messages = first_messages([photos[i] for i in picks], plan, hull.extents, mode, sections)
     builder = Builder()
     history, best = [], None
     t0 = time.time()
