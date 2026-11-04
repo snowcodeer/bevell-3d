@@ -309,11 +309,34 @@ def best_design(scan_dir, log=print):
     return best[1], best[2]
 
 
+def _on_plate(parts, gap=15.0):
+    """Copies of the parts laid for printing: each on the stable pose with the broadest base,
+    lowest point at z = 0, set out along x with `gap` mm between them, centred on the origin."""
+    placed, x = [], 0.0
+    for m in parts:
+        m = m.copy()
+        try:
+            poses, prob = trimesh.poses.compute_stable_poses(m, n_samples=1)
+            m.apply_transform(poses[int(np.argmax(prob))])
+        except Exception:
+            pass
+        m.apply_translation((x - m.bounds[0][0], -m.centroid[1], -m.bounds[0][2]))
+        x = float(m.bounds[1][0]) + gap
+        placed.append(m)
+    shift = -0.5 * x + gap / 2
+    for m in placed:
+        m.apply_translation((shift, 0, 0))
+    return placed
+
+
 def write(scan_dir, out_dir=None, log=print):
     out_dir = out_dir or scan_dir
     (new_moving, new_fixed, half_m, half_f, pv, rep), col = best_design(scan_dir, log)
     new_moving.export(os.path.join(out_dir, "custom_moving_jaw.stl")); new_fixed.export(os.path.join(out_dir, "custom_wrist_roll_follower.stl"))
-    trimesh.Scene([new_moving, new_fixed.copy().apply_translation((90, 0, 0))]).export(os.path.join(out_dir, "custom_jaws.3mf"))
+    # The 3MF is the print plate: each part on its broadest stable face, its lowest point on the
+    # bed, side by side. At their assembly heights Bambu Studio asked whether two separate parts
+    # were one object.
+    trimesh.Scene(_on_plate([new_moving, new_fixed])).export(os.path.join(out_dir, "custom_jaws.3mf"))
     half_m.export(os.path.join(out_dir, "scissors_half_moving.stl")); half_f.export(os.path.join(out_dir, "scissors_half_fixed.stl"))
     # The preview: both new parts on the gripper, and the scissors in them, gripper closed.
     trimesh.util.concatenate([new_moving.copy().apply_transform(moving_to_gripper(0.0)), new_fixed.copy().apply_transform(fixed_to_gripper())]).export(
