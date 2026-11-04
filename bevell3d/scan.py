@@ -49,6 +49,72 @@ def masks_for(prepared, prompt, cache_path, workers=4):
     return {name: cache[(name, prompt)] for name, _ in prepared}
 
 
+def zoomed_mask(full_path, prompt, box, size, max_side=photos.MAX_SIDE, inside=None):
+    """SAM 3.1 again on a crop of the full-resolution photo round `box` (x0, y0, x1, y1 in
+    working pixels of a working photo `size`), as a working-size mask, or None.
+
+    A small object seen low down can be too few pixels for SAM 3.1 to find at all: on a 42 mm
+    servo with the whole sheet in view it found nothing in any of the eight low photos, with
+    any prompt, and the same photo cropped round the servo gave it at 0.86. A mask from the
+    crop counts only if nearly all of it lies inside `inside`, where the object must be."""
+    import tempfile
+    from PIL import Image
+    im = Image.open(full_path).convert("RGB")
+    s = im.width / size[0]                                   # full pixels per working pixel
+    x0, y0, x1, y1 = box
+    pad = 0.4 * max(x1 - x0, y1 - y0) + 24
+    x0, y0 = max(0, int((x0 - pad) * s)), max(0, int((y0 - pad) * s))
+    x1, y1 = min(im.width, int((x1 + pad) * s)), min(im.height, int((y1 + pad) * s))
+    crop = im.crop((x0, y0, x1, y1))
+    zoom = min(4.0, max_side / max(crop.size))
+    if zoom * s < 1.5:                                       # SAM would see it no closer than before
+        return None
+    crop = crop.resize((max(1, round(crop.width * zoom)), max(1, round(crop.height * zoom))), Image.LANCZOS)
+    with tempfile.NamedTemporaryFile(suffix=".jpg") as f:
+        crop.save(f.name, "JPEG", quality=95)
+        m = object_mask(f.name, prompt)
+    if m is None:
+        return None
+    # Back to working pixels: the crop spans (x0..x1, y0..y1) full pixels.
+    wx0, wy0 = x0 / s, y0 / s
+    ww, wh = (x1 - x0) / s, (y1 - y0) / s
+    A = np.array([[ww / m.shape[1], 0, wx0], [0, wh / m.shape[0], wy0]], np.float32)
+    out = cv2.warpAffine(m.astype(np.float32), A, tuple(size), flags=cv2.INTER_AREA) > 0.5
+    if not out.any() or (inside is not None and (out & inside).sum() < 0.9 * out.sum()):
+        return None
+    return out
+
+
+def look_closer(prepared, views, masks, prompt, size, workers=4):
+    """Ask SAM 3.1 again, on a zoomed crop, in each placed photo where it found nothing. Where
+    to crop comes from a rough hull of the photos that do have masks: the object lies inside
+    it, so its outline in the other photos bounds where to look and checks what comes back."""
+    from concurrent.futures import ThreadPoolExecutor
+    missing = [v for v in views if masks.get(v["name"]) is None]
+    found = [v for v in views if masks.get(v["name"]) is not None]
+    if not missing or len(found) < 3:
+        return {}
+    try:
+        rough = visual_hull(found, [masks[v["name"]] for v in found], step=2.0)
+    except ValueError:
+        return {}
+    full = {n: f for n, _, f in prepared}
+    k = max(3, int(0.01 * min(size)))
+
+    def one(v):
+        sil = silhouette(rough, v, size)
+        if not sil.any():
+            return None
+        ys, xs = np.nonzero(sil)
+        near = cv2.dilate(sil.astype(np.uint8), np.ones((2 * k + 1, 2 * k + 1), np.uint8)) > 0
+        try:
+            return zoomed_mask(full[v["name"]], prompt, (xs.min(), ys.min(), xs.max(), ys.max()), size, inside=near)
+        except Exception:
+            return None
+    with ThreadPoolExecutor(workers) as pool:
+        return {v["name"]: m for v, m in zip(missing, pool.map(one, missing)) if m is not None}
+
+
 def camera_centres(views):
     out = []
     for v in views:
@@ -100,6 +166,10 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
     timings["markers"] = round(time.time() - t, 1); t = time.time()
     progress("masks", f"{len(views)} cameras placed; SAM 3.1 is cutting the object out")
     masks = masks_for([(n, p) for n, p, _ in prepared if n in posed], prompt, os.path.join(out_dir, "masks.pkl"))
+    closer = look_closer(prepared, views, masks, prompt, size)
+    if closer:
+        progress("masks", f"found the object in {len(closer)} more photos by looking closer")
+        masks.update(closer)
     views = [v for v in views if masks.get(v["name"]) is not None]
     mask_list = [masks[v["name"]] for v in views]
     timings["masks"] = round(time.time() - t, 1); t = time.time(); progress("hull", "building the shape from the photos")
@@ -111,6 +181,7 @@ def scan(photo_paths, prompt, out_dir, step=0.75, progress=lambda *a: None, timi
     report = {
         "photos": len(prepared), "posed": len(views),
         "skipped": sorted({n for n, _, _ in prepared} - {v["name"] for v in views}),
+        "looked_closer": sorted(closer),
         "unreadable": json.load(open(os.path.join(out_dir, "photos", "unreadable.json"))) if os.path.exists(os.path.join(out_dir, "photos", "unreadable.json")) else [],
         "focal_px": round(float(K[0, 0]), 1), "calibration_rms_px": None if rms is None else round(rms, 3),
         "marker_error_px": {v["name"]: round(v["err_px"], 2) for v in views},
