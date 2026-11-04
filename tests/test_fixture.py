@@ -1,4 +1,5 @@
-import json, numpy as np, trimesh
+import json, os
+import numpy as np, pytest, trimesh
 from bevell3d.fixture import fixture_cad, write_fixture
 
 
@@ -52,3 +53,28 @@ def test_the_pick_preview_finds_the_tag_where_the_camera_sees_it():
     out, info = preview(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), rep, focal_px=f)
     assert abs(info["tag_distance_mm"] - np.linalg.norm(tvec)) < 3, info
     assert out.shape == (H, W, 3)
+
+
+@pytest.mark.skipif(not os.path.exists("/Applications/Blender.app/Contents/MacOS/Blender"), reason="needs Blender")
+def test_the_pick_found_in_a_rendered_scene_lands_on_the_true_grasp(tmp_path):
+    """The whole chain: fixture, tag frame, sticker turn, detection, pose. Rendered from a known
+    camera, the grasp read off the image must land where it really is."""
+    import subprocess, cv2
+    from bevell3d.fixture import write_fixture
+    from tools.make_parts import bracket
+    from tools.pick_preview import preview
+    s = bracket().val(); vs, fs = s.tessellate(0.05, 0.2)
+    part = trimesh.Trimesh(np.array([v.toTuple() for v in vs]), np.array(fs)); part.apply_translation((150 - part.centroid[0], 105 - part.centroid[1], -part.bounds[0][2]))
+    part.export(tmp_path / "model.stl")
+    rep = write_fixture(str(tmp_path), part)
+    cv2.imwrite(str(tmp_path / "tag_texture.png"), cv2.aruco.generateImageMarker(
+        cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, rep["tag"]["dictionary"])), rep["tag"]["id"], 600))
+    subprocess.run(["/Applications/Blender.app/Contents/MacOS/Blender", "-b", "-P", "tools/render_fixture_scene.py", "--",
+                    "--dir", str(tmp_path), "--out", str(tmp_path / "scene.png")], check=True, capture_output=True, timeout=600)
+    cam = json.load(open(tmp_path / "camera.json"))
+    _, info = preview(cv2.imread(str(tmp_path / "scene.png")), rep, focal_px=cam["K"][0][0])
+    t = rep["tag_in_holder"]; R = np.array([t["x_axis"], t["y_axis"], t["z_axis"]]).T
+    w2c = np.array(cam["world_to_camera_m"])
+    truth = (w2c[:3, :3] @ ((np.array(t["origin_mm"]) + R @ np.array(rep["grasp"]["centre_mm"])) / 1000) + w2c[:3, 3]) * 1000
+    err = np.array(info["grasp_camera_mm"]) - truth
+    assert np.linalg.norm(err[:2]) < 2 and np.linalg.norm(err) < 6, (err, truth)

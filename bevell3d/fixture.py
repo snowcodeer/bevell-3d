@@ -65,7 +65,11 @@ def fixture_cad(mesh, pad=PadParams(), hp=HolderParams(), tag_id=TAG_ID):
                   "jaw_open_mm": round(width + 2 * (pad.thickness + 8.0), 1),
                   "jaw_closed_on_part_mm": round(width + 2 * (pad.clearance + pad.thickness), 1),
                   "pregrasp_mm": to_tag(grasp_pt + np.array([0, 0, height + 40.0]))},
-        "part": {"size_mm": [round(float(e), 1) for e in mesh.extents], "seated_base_z_mm": round(float(hp.floor - tag_origin[2]), 2)},
+        "part": {"size_mm": [round(float(e), 1) for e in mesh.extents], "seated_base_z_mm": round(float(hp.floor - tag_origin[2]), 2),
+                 "seat_shift_mm": [0.0, 0.0, round(float(base_shift), 3)]},
+        # Where the tag sits in the holder's own frame (the scan's sheet frame), for simulation.
+        "tag_in_holder": {"origin_mm": tag_origin.round(3).tolist(), "x_axis": x_axis.round(6).tolist(),
+                          "y_axis": y_axis.round(6).tolist(), "z_axis": z_axis.round(6).tolist()},
         "fixture": {**{k: info[k] for k in ("holder_mm", "pocket_depth_mm", "valid")}, "relief_mm": round(2 * r, 1),
                     "relief_depth_mm": round(r, 1), "tab_mm": TAB_MM, "dfm": info["dfm"]},
     }

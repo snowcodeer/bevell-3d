@@ -13,7 +13,9 @@ import numpy as np, cv2
 def find_tag(img, rep, K):
     """(rvec, tvec) of the fixture's tag, in mm, or None."""
     tag = rep["tag"]
-    det = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, tag["dictionary"])))
+    params = cv2.aruco.DetectorParameters()
+    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX      # depth hangs on the corners
+    det = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, tag["dictionary"])), params)
     corners, ids, _ = det.detectMarkers(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img)
     if ids is None or tag["id"] not in ids.ravel():
         return None

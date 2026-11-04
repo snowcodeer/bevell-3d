@@ -36,6 +36,18 @@ robot.** Every claim on screen is one we measured; the numbers are in the README
 | 2:15 to 2:40 | "Open in Bambu Studio" from the print screen; a time-lapse of the holder printing; the part drops into its holder. Then the robot fixture: the arm's camera finds the tag, and the SO-101 picks the part with its fitted pads. | "One tap sends a holder to the printer: rounded rim, lead-in, no supports. And the same scan makes a fixture a robot can use: a tag that tells its camera where the part is, finger reliefs where its jaws go, and the pick, ready to run." |
 | 2:40 to 3:00 | Numbers card, then the Meta models card, then the URL. | "Tested on scanned objects with known true shapes and on the mistakes people make with photos. Built on Meta's Muse Spark, SAM 3.1 and SAM 3D. Try it: link below." |
 
+## Ready-made shots
+
+- `docs/images/robot_pick.png`: the scanned bracket in its fixture, rendered from a robot's
+  camera, with the tag found and the planned pick drawn (jaws through the finger reliefs,
+  approach from above). Made by `tools/render_fixture_scene.py` and `tools/pick_preview.py`;
+  the pick lands 0.3 mm sideways and 3 mm in depth from the truth at 33 cm. Use it as B-roll
+  for the robot section, or film the same overlay live from the arm's camera with
+  `python -m tools.pick_preview photo.jpg fixture.json`.
+- The examples on the start screen cover each kind: Vitamin bottle (revolve), Bracket and Gear
+  (sketch + extrude, robot fixture), Mug (Muse Spark's tree with its handle), Alarm clock,
+  Mario and Fish (smooth NURBS), Tape roll.
+
 ## Numbers card (from the README, checked before recording)
 
 - Camera positions: 0.2 to 0.3 mm.
