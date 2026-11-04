@@ -73,6 +73,7 @@ def find_pivot(scan_dir, outline, info, thickness):
     e = np.array(width.exterior.coords)[:4]; across = min(np.linalg.norm(e[1] - e[0]), np.linalg.norm(e[2] - e[1]))
     inner = outline.buffer(-1.0)
     best = None
+    cands = []
     for rank, (cx, cy, r) in enumerate(circles[0]):
         c = np.array(to_mm((cx, cy))); rr = r * RES
         along = (c - q) @ toward                          # how far towards the blades from the grasp line
@@ -85,10 +86,16 @@ def find_pivot(scan_dir, outline, info, thickness):
         gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0); gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1)
         edge = float(np.hypot(gx, gy)[ring > 0].mean())
         score = edge / (1 + rank * 0.15) - 0.5 * off
+        cands.append((score, c, rr, along, off))
         if best is None or score > best[0]:
             best = (score, c, rr, along, off)
     if best is None:
         return None, "no circle near the tool's axis on the blade side"
+    # A screw head is the innermost circle: the boss or the dark ring round it scores as a bigger
+    # circle with the head inside it (on a black pair the 7 mm ring sat 4.6 mm off the 2.5 mm head).
+    nested = [k for k in cands if k[2] < 0.6 * best[2] and np.linalg.norm(k[1] - best[1]) + k[2] <= best[2] + 1.0]
+    if nested:
+        best = max(nested, key=lambda k: k[0])
     _, c, rr, along, off = best
     return c, {"how": "screw circle in the photo from above", "photo": v["name"], "radius_mm": round(float(rr), 1),
                "from_grasp_line_mm": round(float(along), 1), "off_axis_mm": round(float(off), 1)}
@@ -238,7 +245,8 @@ def footprint(mesh, res=0.2):
         if hier[0][i][3] != -1 or len(c) < 3:
             continue
         holes = [cs[j][:, 0, :] * res + lo for j in range(len(cs)) if hier[0][j][3] == i and len(cs[j]) >= 3]
-        polys.append(P(c[:, 0, :] * res + lo, holes).buffer(0))
+        g = P(c[:, 0, :] * res + lo, holes).buffer(0)
+        polys.extend(getattr(g, "geoms", [g]))
     return max(polys, key=lambda g: g.area) if polys else None
 
 

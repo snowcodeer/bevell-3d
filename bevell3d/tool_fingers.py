@@ -114,11 +114,19 @@ def handles(mesh, p=FingerParams(), n=121, outline=None):
     for s in np.linspace(-0.47, 0.47, n):
         q = c0 + ax * s * L
         iv = _intervals(fp, q, perp)
+        fused = False
+        if len(iv) == 1 and outline is not None:
+            # Loops that touch: one shape from above with two finger holes. Split at the middle
+            # of the wall they share.
+            ii = _intervals(holed, q, perp)
+            if len(ii) == 3:
+                mid = 0.5 * (ii[1][0] + ii[1][1])
+                iv, fused = [(ii[0][0], mid), (mid, ii[2][1])], True
         if len(iv) != 2:
             continue
         w = [b - a for a, b in iv]
         gap = iv[1][0] - iv[0][1]
-        if gap < 1.5 or not all(p.min_handle <= x <= p.max_handle for x in w):
+        if (gap < 1.5 and not fused) or not all(p.min_handle <= x <= p.max_handle for x in w):
             continue
         found.append((s, q, iv, w))
     if not found:
@@ -128,6 +136,16 @@ def handles(mesh, p=FingerParams(), n=121, outline=None):
     side = max((-1, 1), key=lambda sg: sum(1 for x in sides if x == sg))
     run = [f for f in found if np.sign(f[0]) == side]
     s_mid = np.median([f[0] for f in run])
+    # Lines that cross both finger holes, when any do: on a pair whose loops nearly touch in the
+    # middle the only gap between the handles is at the loops' far ends, past the holes, and the
+    # widest line there found no loops at all.
+    def _both_loops(f):
+        inner_f = _intervals(holed, f[1], perp)
+        return all(len([(a, b) for a, b in inner_f if b > lo + 0.3 and a < hi - 0.3]) >= 2 for lo, hi in f[2])
+    looped = [f for f in run if _both_loops(f)]
+    if looped:
+        run = looped
+        s_mid = np.median([f[0] for f in run])
     # Widest pair (the loops' middles), nudged towards the middle of the run (pliers' handles
     # are about as wide all along).
     s, q, iv, w = max(run, key=lambda f: sum(f[3]) - 0.03 * abs(f[0] - s_mid) * L)
@@ -136,7 +154,7 @@ def handles(mesh, p=FingerParams(), n=121, outline=None):
     for k in range(2):
         lo, hi = iv[k]
         # The part to grip: the outermost piece of this handle on the line (a loop's outer ring).
-        mine = [(a, b) for a, b in inner if a >= lo - 0.5 and b <= hi + 0.5]
+        mine = [(max(a, lo), min(b, hi)) for a, b in inner if b > lo + 0.3 and a < hi - 0.3]
         loop = len(mine) >= 2
         if mine:
             lo, hi = mine[0] if k == 0 else mine[-1]
