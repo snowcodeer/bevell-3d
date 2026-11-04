@@ -793,6 +793,8 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
   if (!anim) three.tick = null;
   document.querySelector('.seg [data-show="agent"]').hidden = !agent;
   document.querySelector('.seg [data-show="fingers"]').hidden = !(fingers || moving);
+  document.querySelector('.seg [data-show="holder"]').hidden = !holder;
+  document.querySelector('.seg [data-show="both"]').hidden = !holder;
   const seated = model.clone(); seated.position.z = floor - model.geometry.boundingBox.min.z;
   const showIt = (what) => {
     three.group.clear();

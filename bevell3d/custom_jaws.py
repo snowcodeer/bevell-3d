@@ -61,7 +61,7 @@ def _extrude(poly, z0, z1):
     return trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
 
 
-def loop_clip_mesh(outline, h, p=FingerParams(), span=24.0, wall=1.8, lip=0.45, lip_width=1.2):
+def loop_clip_mesh(outline, h, p=FingerParams(), span=None, wall=1.8, lip=0.45, lip_width=1.2):
     """A clip that snaps round one finger-loop ring, in the sheet frame: the ring's stretch round
     the grasp point (its own curve) inside a channel with a `wall` mm wall, open on the hole side
     but for a lip at the top and bottom edges standing `lip` mm into the ring's thickness. The
@@ -69,6 +69,9 @@ def loop_clip_mesh(outline, h, p=FingerParams(), span=24.0, wall=1.8, lip=0.45, 
     c = np.array(h["centre_mm"]); t = h["thickness_mm"]; z0 = h["z_mm"]
     holes = [Polygon(r) for r in outline.interiors if Polygon(r).area > 20]
     hole = min(holes, key=lambda g: g.distance(Point(c)))
+    if span is None:                                   # half the loop's length: a C round the end, not a blob
+        e = np.array(hole.minimum_rotated_rectangle.exterior.coords)[:4]
+        span = float(np.clip(0.5 * max(np.linalg.norm(e[1] - e[0]), np.linalg.norm(e[2] - e[1])), 10.0, 24.0))
     ring = outline.intersection(hole.buffer(h["width_mm"] + 3.0)).difference(hole)
     window = Point(c).buffer(span / 2, 64)
     ring_w = ring.intersection(window)
@@ -78,7 +81,7 @@ def loop_clip_mesh(outline, h, p=FingerParams(), span=24.0, wall=1.8, lip=0.45, 
     strip = footprint.difference(ring_w.buffer(p.clearance, 32)).intersection(hole.buffer(p.clearance + 0.05, 32))
     if not strip.is_empty and strip.area > 0.05:
         body = trimesh.boolean.difference([body, _extrude(strip, z0 + lip, z0 + t - lip)], engine="manifold")
-    return body, {"span_mm": span, "wall_mm": wall, "snap_lip_mm": lip, "opening_mm": round(t - 2 * lip, 2),
+    return body, {"span_mm": round(span, 1), "wall_mm": wall, "snap_lip_mm": lip, "opening_mm": round(t - 2 * lip, 2),
                   "ring_mm": [h["width_mm"], t]}
 
 
