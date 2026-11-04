@@ -84,7 +84,22 @@ def _status(scan_id, **kw):
     return st
 
 
-def _work(scan_id, paths):
+SCAN_TIMEOUT_S = int(os.environ.get("BEVELL3D_SCAN_TIMEOUT", "1200"))
+AGENT_TIMEOUT_S = int(os.environ.get("BEVELL3D_AGENT_TIMEOUT", "1800"))
+
+
+def friendly(e):
+    """What the person sees. Our own refusals (ValueError) are written for people; anything else
+    is ours to fix, so it says so, and the detail stays in the status file."""
+    if isinstance(e, ValueError) and str(e):
+        return str(e)
+    return "Something went wrong on our side. Try again; if it happens again, tell us."
+
+
+def _scan_child(scan_id, paths, scans_dir):
+    """The pipeline in a process of its own (spawned), writing its progress to status.json."""
+    global SCANS
+    SCANS = scans_dir
     from bevell3d.run import run
     started = time.time()
     done = []
@@ -95,14 +110,66 @@ def _work(scan_id, paths):
             done.append(st["stage"])
         _status(scan_id, stage=stage, detail=detail, done=done, elapsed=round(time.time() - started, 1))
 
-    with lock:                                   # one scan at a time on a laptop
+    try:
+        summary = run(paths, os.path.join(SCANS, scan_id, "result"), log=lambda *a: None, progress=progress)
+        _status(scan_id, state="done", stage="done", elapsed=round(time.time() - started, 1), summary=summary)
+    except Exception as e:
+        traceback.print_exc()
+        _status(scan_id, state="failed", error=friendly(e), error_detail=f"{type(e).__name__}: {e}"[:500],
+                elapsed=round(time.time() - started, 1))
+
+
+def _agent_child(scan_id, scans_dir):
+    global SCANS
+    SCANS = scans_dir
+    from bevell3d.agent_cad import run_agent
+    res = os.path.join(SCANS, scan_id, "result")
+    started = time.time()
+
+    def log(msg):
+        _status(scan_id, agent={"state": "running", "detail": str(msg)[:160], "elapsed": round(time.time() - started)})
+
+    log("Muse Spark is writing the CAD")
+    try:
+        rep = run_agent(res, rounds=2, log=log)
+        _status(scan_id, agent={"state": "done", "report": rep, "elapsed": round(time.time() - started)})
+    except Exception as e:
+        traceback.print_exc()
+        _status(scan_id, agent={"state": "failed", "error": friendly(e), "error_detail": f"{type(e).__name__}: {e}"[:500]})
+
+
+def _in_child(target, args, timeout, on_stop):
+    """Run `target` in a spawned process and wait at most `timeout` s. A scan that hangs or
+    crashes in native code then ends only itself: before, one stuck scan held the lock and every
+    scan after it waited for ever, and a crash would have taken the server down."""
+    import multiprocessing as mp
+    # Not a daemon: the scan starts processes of its own (the holder's, the agent's builder),
+    # which a daemonic process may not, and every holder failed with an AssertionError.
+    p = mp.get_context("spawn").Process(target=target, args=args, daemon=False)
+    p.start(); p.join(timeout)
+    if p.is_alive():
+        p.terminate(); p.join(10)
+        if p.is_alive():
+            p.kill(); p.join(5)
+        on_stop("timeout")
+    elif p.exitcode != 0:
+        on_stop(f"exit {p.exitcode}")
+
+
+def _work(scan_id, paths, target=None, timeout=None):
+    started = time.time()
+    with lock:                                   # one scan at a time per container
         _status(scan_id, state="running", stage="plan", detail="starting", started=started)
-        try:
-            summary = run(paths, os.path.join(SCANS, scan_id, "result"), log=lambda *a: None, progress=progress)
-            _status(scan_id, state="done", stage="done", elapsed=round(time.time() - started, 1), summary=summary)
-        except Exception as e:
-            traceback.print_exc()
-            _status(scan_id, state="failed", error=f"{type(e).__name__}: {e}", elapsed=round(time.time() - started, 1))
+
+        def stopped(why):
+            st = json.load(open(os.path.join(SCANS, scan_id, "status.json")))
+            if st.get("state") in ("done", "failed"):
+                return
+            _status(scan_id, state="failed", error_detail=why, elapsed=round(time.time() - started, 1),
+                    error="That scan took too long, so it was stopped. Try again with sharp photos of one object; "
+                          "if it happens again, tell us." if why == "timeout" else
+                          "The scan stopped unexpectedly. Try again; if it happens again, tell us.")
+        _in_child(target or _scan_child, (scan_id, paths, SCANS), timeout or SCAN_TIMEOUT_S, stopped)
 
 
 @app.get("/api/config")
@@ -158,21 +225,15 @@ def scan_file(scan_id: str, name: str):
 
 
 def _agent(scan_id):
-    from bevell3d.agent_cad import run_agent
-    res = os.path.join(SCANS, scan_id, "result")
-    started = time.time()
-
-    def log(msg):
-        _status(scan_id, agent={"state": "running", "detail": str(msg)[:160], "elapsed": round(time.time() - started)})
-
     with lock:
-        log("Muse Spark is writing the CAD")
-        try:
-            rep = run_agent(res, rounds=2, log=log)
-            _status(scan_id, agent={"state": "done", "report": rep, "elapsed": round(time.time() - started)})
-        except Exception as e:
-            traceback.print_exc()
-            _status(scan_id, agent={"state": "failed", "error": f"{type(e).__name__}: {e}"})
+        def stopped(why):
+            st = json.load(open(os.path.join(SCANS, scan_id, "status.json")))
+            if (st.get("agent") or {}).get("state") in ("done", "failed"):
+                return
+            _status(scan_id, agent={"state": "failed", "error_detail": why,
+                                    "error": "Writing the CAD took too long, so it was stopped. Try again." if why == "timeout"
+                                    else "Writing the CAD stopped unexpectedly. Try again."})
+        _in_child(_agent_child, (scan_id, SCANS), AGENT_TIMEOUT_S, stopped)
 
 
 @app.post("/api/scans/{scan_id}/agent")

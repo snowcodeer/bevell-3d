@@ -113,3 +113,23 @@ def test_the_page_and_the_sheet_load(client):
     assert page.status_code == 200 and "Photos in" in page.text
     sheet = client.get("/sheet.pdf")
     assert sheet.status_code == 200 and sheet.content[:4] == b"%PDF"
+
+
+def test_our_refusals_read_as_written_and_anything_else_is_ours():
+    assert server.friendly(ValueError("Take them from all the way round.")) == "Take them from all the way round."
+    assert "on our side" in server.friendly(KeyError("rv"))
+    assert "on our side" in server.friendly(RuntimeError("cuda"))
+
+
+@pytest.mark.parametrize("target, says", [("sleepy", "took too long"), ("crashy", "stopped unexpectedly")])
+def test_a_scan_that_hangs_or_crashes_ends_itself_not_the_server(tmp_path, monkeypatch, target, says):
+    from tests import _children
+    monkeypatch.setattr(server, "SCANS", str(tmp_path))
+    (tmp_path / "abcd1234").mkdir()
+    server._status("abcd1234", state="queued")
+    t = time.time()
+    server._work("abcd1234", [], target=getattr(_children, target), timeout=3)
+    st = json.load(open(tmp_path / "abcd1234" / "status.json"))
+    assert st["state"] == "failed" and says in st["error"] and time.time() - t < 30, st
+    assert server.lock.acquire(timeout=1)                 # the next scan is not blocked
+    server.lock.release()
