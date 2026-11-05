@@ -11,10 +11,16 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(os.path.dirname(HERE))
 SCAN = os.path.join(ROOT, "out", "black_scissors")
 BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
-FONTS = os.environ.get("BEVELL_FONTS", "/private/tmp/claude-501/-Users-nataliechan-Projects-bevell/a2b2193e-bc31-4c51-853a-b32a3ad2f03a/scratchpad/fonts")
+FONTS = os.environ.get("BEVELL_FONTS", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "out", "fonts"))
 FPS, SECONDS, W, H = 30, 14, 1920, 1080
 ACCENT = (57, 90, 246); ACCENT_LIGHT = (100, 126, 248)
 DEPTH = 100.0                      # mm from a camera to its image plane in the scene
+
+
+# The 11-photo guided set the app now asks for: six at 45 degrees round the sheet, four low, one
+# from above. The dark scissors were photographed before the change (15 photos), so the clips use
+# the matching 11.
+GUIDED = ["IMG_00", "IMG_01", "IMG_02", "IMG_03", "IMG_04", "IMG_05", "IMG_06", "IMG_09", "IMG_11", "IMG_13", "IMG_14"]
 
 
 def prep(work):
@@ -24,6 +30,8 @@ def prep(work):
     cams = []
     ctr = np.array([148.5, 105.0])
     for v, m in zip(vp["views"], vp["masks"]):
+        if v["name"] not in GUIDED:
+            continue
         R = cv2.Rodrigues(v["rv"])[0]; t = np.asarray(v["tv"], float).reshape(3); K = np.asarray(v["K"], float)
         C = -R.T @ t
         def ray(u, w):

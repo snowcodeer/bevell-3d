@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCAN = os.path.join(ROOT, "out", "black_scissors")
-FONTS = os.environ.get("BEVELL_FONTS", "/private/tmp/claude-501/-Users-nataliechan-Projects-bevell/a2b2193e-bc31-4c51-853a-b32a3ad2f03a/scratchpad/fonts")
+FONTS = os.environ.get("BEVELL_FONTS", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "out", "fonts"))
 VERTICAL = "--vertical" in sys.argv
 W, H = (1080, 1920) if VERTICAL else (1920, 1080)
 FPS = 30
@@ -23,8 +23,14 @@ PALE = (0x80, 0x95, 0xF9)
 MUTED = (0x9A, 0xA0, 0xAA)
 PER, XFADE, END = 1.2, 0.25, 3.0
 
+# The 11-photo guided set the app now asks for: six at 45 degrees round the sheet, four low, one
+# from above. The dark scissors were photographed before the change (15 photos), so the clips use
+# the matching 11.
+GUIDED = ["IMG_00", "IMG_01", "IMG_02", "IMG_03", "IMG_04", "IMG_05", "IMG_06", "IMG_09", "IMG_11", "IMG_13", "IMG_14"]
 vp = pickle.load(open(os.path.join(SCAN, "views.pkl"), "rb"))
-views, masks = vp["views"], vp["masks"]
+_by = {v["name"]: (v, m) for v, m in zip(vp["views"], vp["masks"])}
+views = [_by[n][0] for n in GUIDED if n in _by]
+masks = [_by[n][1] for n in GUIDED if n in _by]
 lay = json.load(open(os.path.join(ROOT, "assets", "capture_sheet_layout.json")))
 font = lambda w, s: ImageFont.truetype(os.path.join(FONTS, f"Inter-{w}.ttf"), s)
 title_font = ImageFont.truetype(os.path.join(FONTS, "Outfit-600.ttf"), 34 if not VERTICAL else 40)
@@ -120,7 +126,7 @@ def chrome(img, k=None, n=None, end=False):
 
 def grid_frame(ps):
     n = len(ps)
-    cols, rows = (7, 2) if not VERTICAL else (3, 5)
+    cols, rows = ((n + 1) // 2, 2) if not VERTICAL else (3, (n + 2) // 3)
     gap = 14
     gw, gh = BOX_W, BOX_H
     tw = (gw - (cols - 1) * gap) // cols; th = int(tw * 4 / 3)
