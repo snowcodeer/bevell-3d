@@ -368,6 +368,7 @@ def _work(scan_id, paths, key=None, sam3d=True, target=None, timeout=None):
 # its MuJoCo clip first) is copied in, and the status walks the real stages with the real wording.
 DEMO_SOURCE = os.environ.get("BEVELL3D_DEMO_SOURCE", "")
 DEMO_PACE = float(os.environ.get("BEVELL3D_DEMO_PACE", "1.0"))     # 0 in the tests
+_CopyThread = threading.Thread                                       # the real one, whatever a test swaps in
 DEMO_STEPS = [("plan", "Muse Spark is looking at the photos", 2), ("photos", "{n} photos", 2),
               ("markers", "finding the sheet's markers", 3), ("masks", "{n} cameras placed; SAM 3.1 is cutting the object out", 4),
               ("hull", "building the shape from the photos", 3), ("sam3d", "SAM 3D is generating the full shape", 6),
@@ -401,16 +402,21 @@ def _demo(scan_id, source, n):
     started = time.time()
     done = []
     try:
-        _status(scan_id, state="running", stage="plan", detail="starting", started=started, demo_of=source)
         src = json.load(open(os.path.join(SCANS, source, "status.json")))
-        shutil.copytree(os.path.join(SCANS, source, "result"), os.path.join(SCANS, scan_id, "result"), dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns("full", "*.glb", "masks.pkl"))     # what the page never reads
+        _status(scan_id, state="running", stage="plan", detail="starting", started=started, demo_of=source, plan=src.get("plan"))
+        # The copy runs beside the stages (on the Modal volume it took 12 s); done waits for it.
+        copy = _CopyThread(target=shutil.copytree, args=(os.path.join(SCANS, source, "result"), os.path.join(SCANS, scan_id, "result")),
+                                kwargs={"dirs_exist_ok": True, "ignore": shutil.ignore_patterns("full", "*.glb", "masks.pkl")})
+        copy.start()
         for stage, detail, secs in DEMO_STEPS:
             st = json.load(open(os.path.join(SCANS, scan_id, "status.json")))
             if st.get("stage") and st["stage"] != stage and st["stage"] not in done:
                 done.append(st["stage"])
             _status(scan_id, stage=stage, detail=detail.format(n=n), done=done, elapsed=round(time.time() - started, 1))
             time.sleep(secs * DEMO_PACE)
+        copy.join()
+        if not os.path.exists(os.path.join(SCANS, scan_id, "result", "custom_jaws.3mf")):
+            raise RuntimeError("the demo's files were not copied")
         _status(scan_id, state="done", stage="done", detail="ready", done=done + ["grippers"],
                 elapsed=round(time.time() - started, 1), summary=src.get("summary"), plan=src.get("plan"))
     except Exception as e:
