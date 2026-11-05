@@ -2,6 +2,8 @@
 
 ![Bevell 3D: custom SO-101 grippers designed from phone photos of a pair of scissors](docs/images/hero.png)
 
+<p align="center"><img src="docs/images/grippers-mujoco.gif" width="560" alt="The new SO-101 jaws opening and closing the scissors in MuJoCo"><br><sub>Tested in MuJoCo before printing: the jaw opens 25.8°, the blades open 25.8°, nothing collides.</sub></p>
+
 Photos of an object on a printed sheet in. A true-size 3D model, editable CAD, a holder
 to print and gripper pads for a robot arm out. Photograph a pair of scissors and it designs
 custom grippers for the SO-101 arm instead (beta): new jaw parts with the scissors' pivot on
