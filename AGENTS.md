@@ -398,7 +398,7 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
 - **Phone layout:** headless Chrome keeps a desktop window at least about 500 px wide, so a
   `--window-size=390` screenshot crops a wider layout; put the page in a 390 px iframe instead
   (`docs/images/phone_result_print.png`, 4 Nov: no sideways scroll).
-- **Demo:** `docs/DEMO.md` (script and shots), `docs/SUBMISSION.md` (form answers).
+- **Demo:** the video script, shot list, form answers and X drafts are kept out of this repo (Natalie has them locally). `docs/video/` holds the slides and clips.
 
 ## Smooth NURBS for freeform scans (4 Nov)
 
