@@ -372,6 +372,7 @@ def _work(scan_id, paths, key=None, sam3d=True, target=None, timeout=None):
 # same, but no model is called and no cap is counted: the newest finished gripper run (one with
 # its MuJoCo clip first) is copied in, and the status walks the real stages with the real wording.
 DEMO_SOURCE = os.environ.get("BEVELL3D_DEMO_SOURCE", "")
+DEMO_SCAN_SOURCE = os.environ.get("BEVELL3D_DEMO_SCAN_SOURCE", "")      # a normal scan to replay; else the newest
 DEMO_PACE = float(os.environ.get("BEVELL3D_DEMO_PACE", "1.0"))     # 0 in the tests
 _CopyThread = threading.Thread                                       # the real one, whatever a test swaps in
 DEMO_STEPS = [("plan", "Muse Spark is looking at the photos", 2), ("photos", "{n} photos", 2),
@@ -381,9 +382,35 @@ DEMO_STEPS = [("plan", "Muse Spark is looking at the photos", 2), ("photos", "{n
               ("grippers", "designing the custom grippers for the SO-101", 2), ("grippers", "testing them in simulation", 2)]
 
 
-def _demo_source():
-    """The scan a demo replays: BEVELL3D_DEMO_SOURCE, else the newest finished gripper run whose
-    result has its MuJoCo clip, else the newest finished gripper run. None if there is none."""
+def _demo_scan_source():
+    """The normal scan a demo replays: BEVELL3D_DEMO_SCAN_SOURCE, else the newest finished real
+    scan (not a gripper run, not a demo) with its STEP and STL, else example-bracket."""
+    def ok(d):
+        r = os.path.join(SCANS, d, "result")
+        return ID.match(d) and os.path.exists(os.path.join(r, "model.step")) and os.path.exists(os.path.join(r, "model.stl"))
+    if DEMO_SCAN_SOURCE and ok(DEMO_SCAN_SOURCE):
+        return DEMO_SCAN_SOURCE
+    runs = []
+    for d in os.listdir(SCANS) if os.path.isdir(SCANS) else []:
+        try:
+            if d.startswith("example-") or not ok(d):
+                continue
+            st = json.load(open(os.path.join(SCANS, d, "status.json")))
+        except Exception:
+            continue
+        if st.get("state") == "done" and st.get("mode", "scan") == "scan" and not st.get("demo_of"):
+            runs.append((st.get("created", 0), d))
+    if runs:
+        return max(runs)[1]
+    return "example-bracket" if ok("example-bracket") else None
+
+
+def _demo_source(mode="gripper"):
+    """The scan a demo replays. A normal scan: `_demo_scan_source`. Custom grippers:
+    BEVELL3D_DEMO_SOURCE, else the newest finished gripper run whose result has its MuJoCo clip,
+    else the newest finished gripper run. None if there is none."""
+    if mode != "gripper":
+        return _demo_scan_source()
     def result(d):
         return os.path.join(SCANS, d, "result")
     if DEMO_SOURCE and ID.match(DEMO_SOURCE) and os.path.exists(os.path.join(result(DEMO_SOURCE), "custom_jaws.3mf")):
@@ -403,8 +430,11 @@ def _demo_source():
     return max(pick)[1] if pick else None
 
 
-def _demo(scan_id, source, n):
+def _demo(scan_id, source, n, mode="gripper"):
     started = time.time()
+    # A normal scan walks the same stages but the grippers.
+    steps = DEMO_STEPS if mode == "gripper" else [s for s in DEMO_STEPS if s[0] != "grippers"]
+    made = "custom_jaws.3mf" if mode == "gripper" else "model.stl"
     done = []
     try:
         src = json.load(open(os.path.join(SCANS, source, "status.json")))
@@ -413,16 +443,17 @@ def _demo(scan_id, source, n):
         copy = _CopyThread(target=shutil.copytree, args=(os.path.join(SCANS, source, "result"), os.path.join(SCANS, scan_id, "result")),
                                 kwargs={"dirs_exist_ok": True, "ignore": shutil.ignore_patterns("full", "*.glb", "masks.pkl")})
         copy.start()
-        for stage, detail, secs in DEMO_STEPS:
+        for stage, detail, secs in steps:
             st = json.load(open(os.path.join(SCANS, scan_id, "status.json")))
             if st.get("stage") and st["stage"] != stage and st["stage"] not in done:
                 done.append(st["stage"])
             _status(scan_id, stage=stage, detail=detail.format(n=n), done=done, elapsed=round(time.time() - started, 1))
             time.sleep(secs * DEMO_PACE)
         copy.join()
-        if not os.path.exists(os.path.join(SCANS, scan_id, "result", "custom_jaws.3mf")):
+        if not os.path.exists(os.path.join(SCANS, scan_id, "result", made)):
             raise RuntimeError("the demo's files were not copied")
-        _status(scan_id, state="done", stage="done", detail="ready", done=done + ["grippers"],
+        last = steps[-1][0]
+        _status(scan_id, state="done", stage="done", detail="ready", done=done + ([last] if last not in done else []),
                 elapsed=round(time.time() - started, 1), summary=src.get("summary"), plan=src.get("plan"))
     except Exception as e:
         traceback.print_exc()
@@ -438,9 +469,10 @@ def config():
 @app.post("/api/scans")
 async def create_scan(request: Request, photos: list[UploadFile] = File(None), mode: str = Form("scan"),
                       demo: str = Form(""), count: int = Form(0)):
-    # A demo replays a finished gripper run and calls no model, so it needs no passcode or key; it
-    # has a daily cap of its own so the uploads cannot fill the volume.
-    source = _demo_source() if demo == "1" and mode == "gripper" else None   # none: a normal run
+    # A demo replays a finished run (a normal scan or custom grippers) and calls no model, so it
+    # needs no passcode or key; it has a daily cap of its own so the uploads cannot fill the volume.
+    mode = "gripper" if mode == "gripper" else "scan"
+    source = _demo_source(mode) if demo == "1" else None   # none: a normal run
     key, bucket = (None, "demo") if source else await run_in_threadpool(_check_access, request)   # may ask bevell.app
     photos = photos or []
     if source:
@@ -449,8 +481,8 @@ async def create_scan(request: Request, photos: list[UploadFile] = File(None), m
         _count_run(bucket)
         scan_id = uuid.uuid4().hex[:12]
         os.makedirs(os.path.join(SCANS, scan_id))
-        _status(scan_id, state="queued", stage="queued", photos=n, created=time.time(), mode="gripper")
-        threading.Thread(target=_demo, args=(scan_id, source, n), daemon=True).start()
+        _status(scan_id, state="queued", stage="queued", photos=n, created=time.time(), mode=mode)
+        threading.Thread(target=_demo, args=(scan_id, source, n, mode), daemon=True).start()
         return {"id": scan_id}
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")

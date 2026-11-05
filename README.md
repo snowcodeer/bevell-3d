@@ -16,11 +16,11 @@ Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 - **Examples:** open https://bevell.app/3d and tap "See examples": a bottle, a bracket, a gear,
   a mug, a hobby servo, a Mario figure, a fish toothbrush holder and a roll of tape, each with
   its model, CAD and files. Results open on Muse Spark's editable CAD where there is one.
-- **Demo mode (a replay):** open https://bevell.app/3d?demo, tap "Make custom robot grippers"
-  and take or choose the photos. No login, and no photos are uploaded (only how many there
-  are). It replays a finished real gripper run of a pair of scissors in about 30 s, through the
-  same screens, and opens its result: the grippers, the MuJoCo clip and the files. It is a
-  replay, not a new scan.
+- **Demo mode (a replay):** open https://bevell.app/3d?demo, tap "Start a scan" or "Make custom
+  robot grippers", and take or choose the photos. No login, and no photos are uploaded (only how
+  many there are). It replays a finished real run in about 30 s, through the same screens, and
+  opens its result: for a scan, the model, its CAD and the holder; for custom grippers, the
+  grippers on a pair of scissors, the MuJoCo clip and the files. It is a replay, not a new scan.
 - **A finished gripper run** on a real pair of scissors, from 11 photos:
   https://bevell.app/3d#result/d3d1fa28d05e
 

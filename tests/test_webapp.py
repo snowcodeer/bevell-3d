@@ -441,3 +441,39 @@ def test_a_demo_stores_no_photos_and_needs_only_the_count(client, tmp_path, monk
     st = client.get(f"/api/scans/{sid}").json()
     assert st["state"] == "done" and st["photos"] == 11 and st["demo_of"] == "newgripper01"
     assert not (tmp_path / sid / "upload").exists()
+
+
+def _finished_scan_run(tmp_path, sid, created=1.0, extra=None):
+    res = tmp_path / sid / "result"
+    res.mkdir(parents=True)
+    for n in ("model.step", "model.stl", "holder.3mf"):
+        (res / n).write_bytes(b"x")
+    st = {"state": "done", "mode": "scan", "created": created, "summary": {"model_mm": [96.6, 75.0, 29.9]},
+          "plan": {"object": "peach mounting bracket"}}
+    st.update(extra or {})
+    (tmp_path / sid / "status.json").write_text(json.dumps(st))
+    return sid
+
+
+def test_a_scan_demo_replays_the_newest_real_scan_without_a_login(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "DEMO_PACE", 0.0)
+    monkeypatch.setattr(server, "PASSCODE", "Sheet-1234")
+    _finished_scan_run(tmp_path, "oldscan00001", created=1.0)
+    src = _finished_scan_run(tmp_path, "newscan00001", created=2.0)
+    _finished_scan_run(tmp_path, "demoscan0001", created=3.0, extra={"demo_of": "oldscan00001"})   # a replay is never a source
+    _finished_gripper_run(tmp_path, "gripper00001", created=4.0)                                     # nor a gripper run
+    r = client.post("/api/scans", data={"mode": "scan", "demo": "1", "count": "11"})
+    assert r.status_code == 200 and not client.started
+    st = client.get(f"/api/scans/{r.json()['id']}").json()
+    assert st["state"] == "done" and st["demo_of"] == src and st["mode"] == "scan" and st["photos"] == 11
+    assert "grippers" not in st["done"] and "cad" in st["done"]
+    assert {"model.step", "model.stl", "holder.3mf"} <= {f["name"] for f in st["files"]}
+    assert client.post("/api/scans", files=photos(11), data={"mode": "scan"}).status_code == 401   # a real run still needs access
+
+
+def test_a_scan_demo_falls_back_to_the_bracket_example(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "DEMO_PACE", 0.0)
+    _finished_scan_run(tmp_path, "example-bracket", created=1.0)
+    r = client.post("/api/scans", data={"mode": "scan", "demo": "1", "count": "11"})
+    assert r.status_code == 200
+    assert client.get(f"/api/scans/{r.json()['id']}").json()["demo_of"] == "example-bracket"
