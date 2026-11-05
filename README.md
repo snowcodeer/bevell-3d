@@ -1,6 +1,6 @@
 # Bevell 3D
 
-![Bevell 3D: custom SO-101 grippers designed from phone photos of a pair of scissors](docs/images/hero.png)
+<p align="center"><img src="docs/images/full-arm-mujoco.gif" width="760" alt="The whole SO-101 arm in MuJoCo with custom jaws designed from phone photos, holding a pair of scissors and snipping"><br><sub>Custom SO-101 jaws designed from phone photos of a pair of scissors, on the whole arm in MuJoCo (scissors drawn light grey so they show). <a href="docs/videos/full-arm-mujoco.mp4">MP4</a></sub></p>
 
 <p align="center"><img src="docs/images/grippers-mujoco.gif" width="560" alt="The new SO-101 jaws opening and closing the scissors in MuJoCo"><br><sub>Tested in MuJoCo before printing: the jaw opens 25.8°, the blades open 25.8°, nothing collides.</sub></p>
 
@@ -17,16 +17,14 @@ More footage than the demo video had room for. A longer cut of the video with al
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/full-arm-mujoco.gif" alt="The whole SO-101 arm in MuJoCo with the new jaws holding the scissors, snipping"><br><sub>The whole SO-101 in MuJoCo with the new jaws, the scissors snipping as the arm moves (scissors drawn light grey so they show). <a href="docs/videos/full-arm-mujoco.mp4">MP4</a></sub></td>
 <td width="50%"><img src="docs/images/real-scan.gif" alt="The real scan: guided photos of the scissors on a phone, then the model and the jaws"><br><sub>The real scan: 11 guided photos of the scissors on a phone, then the model and the custom jaws on the result page. <a href="docs/videos/real-scan.mp4">MP4</a></sub></td>
+<td width="50%"><img src="docs/images/segmentation-11-photos.gif" alt="SAM 3.1's outline of the scissors in each of the 11 photos"><br><sub>SAM 3.1's outline of the scissors in each of the 11 photos.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/segmentation-11-photos.gif" alt="SAM 3.1's outline of the scissors in each of the 11 photos"><br><sub>SAM 3.1's outline of the scissors in each of the 11 photos.</sub></td>
 <td width="50%"><img src="docs/images/cameras-sam3d.gif" alt="Each photo's camera located from the sheet's markers, and SAM 3D's model placed among them"><br><sub>Each photo's camera, located from the sheet's markers, and SAM 3D's model sized and placed by them.</sub></td>
+<td width="50%"><img src="docs/images/grippers-printing.gif" alt="Time-lapse of the two new jaw parts printing"><br><sub>The first print of the jaws, sped up. <a href="docs/videos/first-print-timelapse.mp4">MP4</a></sub></td>
 </tr>
 </table>
-
-The first print of the jaws is further down (<a href="#custom-robot-grippers-for-a-tool-beta-so-101">custom grippers</a>), and as an MP4: [docs/videos/first-print-timelapse.mp4](docs/videos/first-print-timelapse.mp4).
 
 ## Try it
 
