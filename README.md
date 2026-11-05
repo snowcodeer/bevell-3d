@@ -2,7 +2,9 @@
 
 <p align="center"><img src="docs/images/full-arm-mujoco.gif" width="760" alt="The whole SO-101 arm in MuJoCo with custom jaws designed from phone photos, holding a pair of scissors and snipping"><br><sub>Custom SO-101 jaws designed from phone photos of a pair of scissors, on the whole arm in MuJoCo (scissors drawn light grey so they show). <a href="docs/videos/full-arm-mujoco.mp4">MP4</a></sub></p>
 
-<p align="center"><img src="docs/images/grippers-mujoco.gif" width="560" alt="The new SO-101 jaws opening and closing the scissors in MuJoCo"><br><sub>Tested in MuJoCo before printing: the jaw opens 25.8°, the blades open 25.8°, nothing collides.</sub></p>
+There are lots of general-purpose robots now, but it's hard for them to handle individual tools.
+A standard gripper can hold a pair of scissors; it can't use them. So why not prototype custom
+grippers for specific tasks, faster? Bevell 3D designs them from phone photos of the tool.
 
 Photos of an object on a printed sheet in. A true-size 3D model, editable CAD, a holder
 to print and gripper pads for a robot arm out. Photograph a pair of scissors and it designs
@@ -217,6 +219,8 @@ models measure and fill in, the geometry is computed.
 - **To print:** `custom_jaws.3mf` holds both parts flat on the plate for Bambu Studio. The first
   print came off a Bambu on 5 Nov 2026 (below). The gripper servo got stuck before the cutting
   test, so the snap fit and the cut are not yet proven in plastic.
+
+<p align="center"><img src="docs/images/grippers-mujoco.gif" width="560" alt="The new SO-101 jaws opening and closing the scissors in MuJoCo"><br><sub>Tested in MuJoCo before printing: the jaw opens 25.8°, the blades open 25.8°, nothing collides.</sub></p>
 
 > **A note from the deadline:** I had a flight to catch five hours after the deadline, and I
 > smashed my phone trying to get the stuck servo off before it. So the cut on camera will have to
