@@ -14,15 +14,18 @@ BG, CARD, LINE, ACC, PALE, MUTED = "#14161A", "#1B1E24", "#2A2E36", "#395AF6", "
 ACC_BGR = (246, 90, 57)
 os.makedirs(OUT, exist_ok=True)
 vp = pickle.load(open(os.path.join(SCAN, "views.pkl"), "rb"))
-views, masks = vp["views"], vp["masks"]
+# The 11-photo guided set the app now asks for: six at 45°, four low, one from above.
+KEEP = ["IMG_00", "IMG_01", "IMG_02", "IMG_03", "IMG_04", "IMG_05", "IMG_06", "IMG_09", "IMG_11", "IMG_13", "IMG_14"]
+_pairs = [(v, m) for v, m in zip(vp["views"], vp["masks"]) if v["name"] in KEEP]
+views, masks = [p[0] for p in _pairs], [p[1] for p in _pairs]
 photo = lambda name: cv2.imread(os.path.join(SCAN, "photos", name + ".jpg"))
 
 
 def contact_sheet():
-    names = sorted(f for f in os.listdir(os.path.join(SCAN, "photos")) if f.endswith(".jpg"))
+    names = [n + ".jpg" for n in KEEP]
     ims = [cv2.imread(os.path.join(SCAN, "photos", n)) for n in names]
     tw, th = 330, 248
-    cols = 5; rows = (len(ims) + cols - 1) // cols; gap = 14
+    cols = 6; rows = (len(ims) + cols - 1) // cols; gap = 14
     can = np.full((rows * th + (rows - 1) * gap, cols * tw + (cols - 1) * gap, 3), (0x1A, 0x16, 0x14), np.uint8)
     for i, im in enumerate(ims):
         h, w = im.shape[:2]
