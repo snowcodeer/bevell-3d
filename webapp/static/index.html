@@ -653,7 +653,8 @@ function reviewScreen() {
 // checked by the server): kept in this tab only (sessionStorage), sent with each run.
 let cfg = { passcode: false, byok: false };
 fetch("/api/config").then((r) => r.json()).then((c) => {
-  cfg = c; $("pass-row").hidden = !c.passcode; $("key-row").hidden = !c.byok;
+  // A demo needs neither (it replays a finished run); the fields still appear if the server asks.
+  cfg = c; $("pass-row").hidden = DEMO || !c.passcode; $("key-row").hidden = DEMO || !c.byok;
 }).catch(() => {});
 const KEY_LABEL = "Your Meta Model API key, or a Bevell API key (Bevell Unlimited)";
 const remembered = () => { try { return localStorage.getItem("bevell3d-pass") || ""; } catch { return ""; } };

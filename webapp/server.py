@@ -81,6 +81,7 @@ KEY_FORM = re.compile(r"^[\x21-\x7e]{8,512}$")
 BEVELL_PREFIX = "bvl_"
 BEVELL_ACCOUNT_URL = os.environ.get("BEVELL3D_ACCOUNT_URL", "https://bevell.app/api/v1/account")
 UNLIMITED_DAILY_CAP = int(os.environ.get("BEVELL3D_UNLIMITED_DAILY_CAP", "20") or 0)
+DEMO_DAILY_CAP = int(os.environ.get("BEVELL3D_DEMO_DAILY_CAP", "300") or 0)    # demo replays: no model, storage only
 VERDICT_S, REFUSAL_S = 600, 60              # how long bevell.app's answer is kept, by sha256 of the key
 NOT_RECOGNISED = "That Bevell API key was not recognised. Make one at bevell.app/developers."
 NO_UNLIMITED = "That key's account has no Bevell Unlimited. Get it at bevell.app/pricing."
@@ -151,7 +152,10 @@ def _count_run(bucket=""):
     """Count one run against today's cap (UTC); refuse when it is used up. Own Meta keys share
     a cap of their own, and each Bevell Unlimited account has its own."""
     unlimited = bucket.startswith("unlimited")
-    cap = BYOK_DAILY_CAP if bucket == "own-key" else UNLIMITED_DAILY_CAP if unlimited else DAILY_CAP
+    if bucket == "demo":
+        cap = DEMO_DAILY_CAP
+    else:
+        cap = BYOK_DAILY_CAP if bucket == "own-key" else UNLIMITED_DAILY_CAP if unlimited else DAILY_CAP
     if not cap:
         return
     path = os.path.join(SCANS, "_usage.json")
@@ -160,7 +164,8 @@ def _count_run(bucket=""):
     with usage_lock:
         use = json.load(open(path)) if os.path.exists(path) else {}
         if use.get(name, 0) >= cap:
-            raise HTTPException(429, f"Today's {cap} runs on your Bevell Unlimited account are used up. Try again tomorrow."
+            raise HTTPException(429, f"Today's {cap} demo runs are used up. Try again tomorrow." if bucket == "demo" else
+                                f"Today's {cap} runs on your Bevell Unlimited account are used up. Try again tomorrow."
                                 if unlimited else f"Today's {cap} runs on visitors' own keys are used up. Try again tomorrow, or see the examples."
                                 if bucket else f"Today's {cap} runs are used up. Try again tomorrow, or see the examples.")
         use = {k: v for k, v in use.items() if k.endswith(today)}      # only today's counts are kept
@@ -433,12 +438,13 @@ def config():
 @app.post("/api/scans")
 async def create_scan(request: Request, photos: list[UploadFile] = File(...), mode: str = Form("scan"),
                       demo: str = Form("")):
-    key, bucket = await run_in_threadpool(_check_access, request)      # may ask bevell.app
+    # A demo replays a finished gripper run and calls no model, so it needs no passcode or key; it
+    # has a daily cap of its own so the uploads cannot fill the volume.
+    source = _demo_source() if demo == "1" and mode == "gripper" else None   # none: a normal run
+    key, bucket = (None, "demo") if source else await run_in_threadpool(_check_access, request)   # may ask bevell.app
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")
-    source = _demo_source() if demo == "1" and mode == "gripper" else None   # none: a normal run
-    if not source:
-        _count_run(bucket)
+    _count_run(bucket)
     scan_id = uuid.uuid4().hex[:12]
     up = os.path.join(SCANS, scan_id, "upload")
     os.makedirs(up)
