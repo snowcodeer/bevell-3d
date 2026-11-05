@@ -961,7 +961,9 @@ async function viewer(modelUrl, holderUrl, floor, agentUrl, fingersUrl, fingersF
     document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("on", b.dataset.show === what));
   };
   document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => showIt(b.dataset.show)));
-  showIt((fingers || moving) && fingersFirst ? "fingers" : "model");
+  // Open on the grippers for a gripper result, else on Muse Spark's editable CAD when there is one
+  // (clean features, checked against the photos), else on the measured model.
+  showIt((fingers || moving) && fingersFirst ? "fingers" : agent ? "agent" : "model");
 }
 
 show();
