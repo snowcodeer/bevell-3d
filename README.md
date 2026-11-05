@@ -61,6 +61,8 @@ or Bevell's public API from here, never sharing code.
      reliefs and a printed tag, with the pick given in the tag's frame so the arm's camera
      can find the part and grip it.
 
+<p align="center"><img src="docs/images/fusion-bracket-timeline.gif" width="720" alt="The bracket's prismatic CAD rebuilt step by step in Fusion 360, with its named dimensions"><br><sub>A scanned bracket's CAD in Fusion 360: each level and hole is its own timeline feature, and the heights and hole sizes are named dimensions you can edit. Rendered by Fusion itself.</sub></p>
+
 ## How Meta's models are used
 
 | Model | Through | What it does here |
@@ -197,7 +199,10 @@ models measure and fill in, the geometry is computed.
   open the blades 25.8 degrees, the blades are shut with the gripper closed, and nothing
   collides. The result page plays the simulation.
 - **To print:** `custom_jaws.3mf` holds both parts flat on the plate for Bambu Studio. The first
-  print of these parts is in progress; the snap fit is not yet proven in plastic.
+  print came off a Bambu on 5 Nov 2026 (below). The gripper servo got stuck before the cutting
+  test, so the snap fit and the cut are not yet proven in plastic.
+
+<p align="center"><img src="docs/images/grippers-printing.gif" width="520" alt="Time-lapse of the two new SO-101 jaw parts printing on a Bambu Lab printer"><br><sub>The first print of the two jaw parts, sped up.</sub></p>
 
 ## Credits
 
