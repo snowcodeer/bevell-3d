@@ -2,7 +2,8 @@
 
 Natalie Chan's entry to the **Meta Global AI Developer Hackathon** (Cerebral Valley, remote,
 $1M pool). Photos of an object on a printed marker sheet in; a true-to-size 3D model and a
-3D-printable holder for it out. Startup track. Last updated 3 Nov 2026.
+3D-printable holder for it out, and custom SO-101 grippers for a pair of scissors (beta).
+Submitted 5 Nov 2026 in the Indie developer track. Last updated 5 Nov 2026.
 
 ## Deadline and what must be handed in
 
@@ -337,25 +338,11 @@ The models are in `out/bench/gso/`, and each object's results are in `out/bench/
   29 minutes for 3 rounds (the app runs 2). A build is 0.3 s, so the time is Muse Spark's.
   The fixture grips the case across its 19.7 mm side, 20.5 mm up, below the ears; rendered,
   the pick lands 3.1 mm from the truth at 31 cm (`docs/images/servo_pick.png`).
-- **Robot fingers for a tool** (4 Nov, evening; `bevell3d/tool_fingers.py`, `scissors_sim.py`):
-  - Flow: start screen "Make robot fingers" sends `mode=gripper`; the runner always looks for
-    two handles then (otherwise only for flat objects, height under a fifth of the length, so a
-    mug's handle is never a tool) and says why when it finds none.
-  - Outline: `top_outline` back-projects the masks of the two most top-down photos onto the
-    plane at mid-thickness and intersects them (loops included). Handles: along the long axis,
-    lines that cross the filled outline in exactly two pieces; the grasp line where they are
-    widest; the gripped part is the outermost piece of each (a loop's outer ring).
-  - Simulation: The Robot Studio's SO-101 files in `third_party/so101` (Apache 2.0, commit in
-    `COMMIT`). In the gripper frame the fingertips are about 100 mm down, the jaws close along x
-    and the moving jaw turns about a hinge at (20.2, 18.8, -23.4) mm with axis -y; tips are 15.8
-    mm apart closed. Findings on stand-in scissors: rigid on both jaws they bind; a rail along
-    the finger came within a few degrees of the loop's path and let it run (62 degrees of blade
-    for 3 of gripper on the exact shape, fine on the scan, so ill-conditioned); a rail pointing
-    at the scissors' pivot drives 1:1 (19.5 degrees of gripper, about 19 of blade, joint within
-    0.03 mm, 21 mm of slide) on scan and exact shape alike. That rail is 56 degrees off the
-    finger: its bracket is not designed yet (next step).
-  - The pivot is estimated from the outline (where the two handles join, 6 mm on); a real
-    pair's screw could be found in the photo instead.
+- **Robot fingers for a tool** (4 Nov evening, superseded): stick-on saddle fingers
+  (`tool_fingers.py`), a plug design (`scissor_jaws.py`) and a MuJoCo rail study
+  (`scissors_sim.py`) came first. The custom grippers (`custom_jaws.py`, section below) replaced
+  them; `tool_fingers.handles` and `top_outline` are still what read the tool's handles and
+  outline.
 - **Looking closer** (`scan.look_closer`): a small object seen low down can be too few
   pixels for SAM 3.1. On the 42 mm servo, with the whole sheet in view, it found nothing in
   all eight low photos, with any prompt; the same photo cropped round the servo gave it at
@@ -519,19 +506,34 @@ follower (`custom_wrist_roll_follower.stl`), both in `custom_jaws.3mf`.
   the blades open 1:1 with the jaw. The stock fingers are cut off (`FIXED_CUT_Z`, `HUB_R`).
 - The pivot is the screw: `tool_geometry.find_pivot` flattens the most top-down photo onto
   the sheet at 0.1 mm a pixel and takes the clearest 2 to 8 mm circle near the long axis on
-  the blade side. On her scissors it lands on the screw (r 3.4 mm, 0.3 mm off the axis). The
-  outline's guess (where the handles join) missed by 63 mm.
-- Each finger loop snaps into a clip (`loop_clip_mesh`): a channel round the loop's own curve,
-  open on the hole side, 0.3 mm clearance. One lip, on the wall away from the arm (the arm
-  stiffens the wall it joins), makes the mouth 0.5 mm narrower than the loop, behind a
-  three-step lead-in that starts 0.6 mm wider. About 1% strain on a 1.8 mm wall. A keep-out
-  is cut from the finished part so nothing fills the channel or the way in.
-- Arms are rounded hulls (`_rounded_hull`, 2 mm) from the clip to a flared patch sunk 2 mm
-  into the jaw. The clips themselves are still square extrusions.
+  the blade side, preferring a small circle nested inside a bigger one (a screw head inside its
+  boss). On the clear pair it lands 0.3 mm off the axis; on the dark pair a 7 mm ring 4.6 mm
+  away was the first pick until the nesting rule. The outline's guess missed by 63 mm.
+- The outline: `top_outline` from the photos from above, then `composite_outline` takes SAM 3D's
+  finger holes when SAM 3D and the photos agree on the outside edge (IoU 0.85 or more), each
+  hole at least 4 mm inside that edge: the masks of clear plastic handles fill the holes. Loops
+  that touch each other are split at their shared wall (`tool_fingers.handles`). Each loop's
+  thickness is the smaller of the carved hull's and SAM 3D's (the hull only ever comes out
+  too thick).
+- Each finger loop snaps into a clip (`loop_clip_mesh`): a body round the loop's stretch, 1.8 mm
+  walls, `PRINT_CLEARANCE_MM` (0.4) round the loop, and one lip on the wall away from the arm
+  (the arm stiffens the wall it joins), 1.3 mm high, so the mouth is 0.5 mm narrower than the
+  loop. The slot itself is the scissors' own shape cut from the part (`tool_halves_cut`), one
+  shape, so no slivers: each half where it rests, and from the fixed part the moving half's
+  whole sweep.
+- Arms are rounded hulls (`_rounded_hull`, 2 mm) from the clip to the jaw's own facing surface,
+  sunk only as deep as the material stays solid, then blended in with a 4 mm fillet
+  (`blend.blend_join`, an SDF closing in a box round the joint; the rest of the part is
+  untouched).
 - `best_design` tries side, loops forward or back and flip, and keeps the first with no
-  collisions (decimated meshes). `simulate` runs MuJoCo: on the live run f684f76b871f the
-  gripper's 25.8 degrees opened the blades 25.8 degrees, 0 mm3 of collisions.
-- Not yet printed. Print the moving jaw first to test the snap.
+  collisions (decimated meshes). `simulate` runs MuJoCo; a run in the cloud also renders a 4 s
+  clip (OSMesa) that the result page plays. On the live 11-photo run d3d1fa28d05e: pivot 0.3 mm
+  off the axis, the gripper's 25.8 degrees open the blades 25.8 degrees, shut at 1.8, no
+  collisions.
+- The preview shows the handles as measured (rounded, `round_solid`) and SAM 3D's blades moved
+  so its screw sits on the found pivot and stretched to the outline's tip.
+- `custom_jaws.3mf` is a print plate: both parts on their broadest stable face, on the bed.
+- Not yet proven in plastic. Print the moving jaw first to test the snap.
 
 ## Gotchas already paid for
 
@@ -558,55 +560,22 @@ follower (`custom_wrist_roll_follower.stl`), both in `custom_jaws.3mf`.
 
 ## Status and next steps
 
-**Done (committed, local only):**
-- markers (found at full resolution, reported in the 1536 px working frame), scan, hull, fit,
-  holder (walls Taubin-smoothed), planner, revolved route, runner, Blender render;
-- tests: 8, all passing, including an end-to-end scan from synthetic photo files;
-- SAM 3D weights (13 GB, mesh decoder included) are in the Modal Volume
-  `bevell-sam3d-weights` at `/weights/checkpoints/hf`, copied by `modal_app/sam3d_weights.py`;
-- the `huggingface` Modal secret exists (made 3 Nov); a spending limit is set on Modal.
-- **Revolved route:** on a synthetic waisted vase the axis came back exact and the diameter
-  within 0.2 mm (mean 0.11) from 5 to 90 mm up. `run.py` uses it when the plan says
-  revolved, and keeps it only if it agrees with the photos as well as the hull.
+**Submitted 5 Nov 2026** (Indie developer track). Live at https://bevell.app/3d, a redirect from
+bevell.app to the Modal app `bevell-3d`; SAM 3D runs as `bevell-sam3d` on Modal.
 
-**SAM 3D is deployed** as `bevell-sam3d` on Modal: about 2 min 20 s for a cold call, about
-60 to 90 s warm. The image took four fixes, all in `modal_app/sam3d.py`:
-- the dead NVIDIA index;
-- `nvidia-pyindex`, dropped from SAM 3D's requirements.txt in the build;
-- gcc instead of the clang++ that Modal's Python asks for;
-- `LIDRA_SKIP_INIT` and the CUDA paths the notebook loader expects.
+Checked on 5 Nov 2026, on the code as submitted:
+- `pytest`: 89 tests pass (54 of them the web app's).
+- `tools/user_tests.py`: 13 of 13 photo-mistake scenarios pass (`out/usertests_final.log`).
+- Live runs through the deployed app (`tools/webapp_e2e.py`): the bracket's photos to
+  sketch-and-extrude CAD in 185 s (19 of 19 files open), the Mario figure's to NURBS in 171 s
+  (17 of 17), and 11 photos of a real pair of scissors to custom grippers in 246 s (34 of 34).
 
-A rebuild from scratch takes about 40 minutes, because it compiles pytorch3d for four GPU
-architectures.
-
-**Bevell integration plan:** `the private Bevell repo`, in the
-private Bevell repo because it names Bevell internals.
-
-**Open, roughly in order:**
-
-1. **SAM 3D on the 2 Nov AirPods (done 3 Nov):** fitted 57.0 × 59.5 × 24.6 mm, agreement 0.808 against the hull's 0.786, stretch at its limit (1.15, 0.869), which suggests the old A4-edge cameras. Render: `out/sam3d_test/holder_render.png`. To redo it, run `.venv/bin/python -m tools.sam3d_prototype 1746`. It sends the upright photo
-     and mask in `out/sam3d_test/` (made from the 2 Nov HEIC and the cached SAM 3.1 mask, and
-     checked by overlay), fits the result to the eight 2 Nov photos, and builds a holder. The
-     2 Nov cameras come from the old A4-edge path, so expect a looser fit than with markers.
-   - If the build fails, read the step that failed in the log; every step after
-     `requirements.txt` compiles against torch 2.5.1 cu121.
-   - On the case's size: in IMG_1746 the case looks to be standing upright, not lying flat.
-     The earlier guess that it should be about 24 mm tall may be wrong. Ask Natalie for
-     caliper measurements.
-2. **Reshoot (Natalie):**
-   - Print the sheet at 100%, check a marker measures 22 mm, tape it flat.
-   - For each object take 12 to 16 photos: a ring at about 45°, a ring at about 10°, and two
-     from straight above.
-   - Measure each object with calipers.
-   - Objects: the AirPods case, a round bottle or cup (for the revolved route), and a tool
-     worth a holder.
-   - Run `bevell3d.run` on each set.
-3. **Flat route on markers:** port `flat.py`, and optionally send the rectified top view to
-   Bevell's public API for a DXF. That ties the hackathon work to the product without
-   copying Bevell code.
-4. **Test print** of a holder, if Natalie has a printer (still unconfirmed).
-5. **"Holds up in production":** a small upload page or a Modal web endpoint (photos in, STL and
-   holder out), and report numbers in the UI.
-6. **Optional, for the $10K bonus:** move the planner to Muse Spark Open on Baseten or Modal.
-7. **Write-up and submission:** README, demo video script (3 min, new work only), X post,
-   make the repo public (ask), fill the submission form (Natalie submits).
+**Open:**
+1. **Print and fit the custom jaws.** The snap clips are designed to 0.4 mm clearance and a
+   0.5 mm lip but are not yet proven in plastic. If a loop is loose or will not go in, measure
+   its thickness and regenerate (`custom_jaws.write`).
+2. **More tools:** the grippers handle scissors with finger loops (touching loops included);
+   pliers and other hinged tools are next.
+3. **Muse Spark Open on Modal** for the planner, for the open-weights bonus.
+4. **Bevell integration:** call this service from bevell.app, or Bevell's public API from here,
+   never by sharing code.

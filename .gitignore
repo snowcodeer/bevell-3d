@@ -14,3 +14,5 @@ cache_*.pkl
 *.glb
 *.ply
 !assets/**
+
+.DS_Store

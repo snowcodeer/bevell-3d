@@ -1,5 +1,7 @@
 # Bevell 3D
 
+![Bevell 3D: custom SO-101 grippers designed from phone photos of a pair of scissors](docs/images/hero.png)
+
 Photos of an object on a printed sheet in. A true-size 3D model, editable CAD, a holder
 to print and gripper pads for a robot arm out. Photograph a pair of scissors and it designs
 custom grippers for the SO-101 arm instead (beta): new jaw parts with the scissors' pivot on
@@ -20,8 +22,8 @@ Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 
 ## What is new in this hackathon
 
-Everything in this repository was written during the hackathon (27 Oct to 4 Nov 2026), from
-2 to 4 Nov: the first commit is 3 Nov 2026, 00:36 UTC. It is built for [Bevell](https://bevell.app), an existing product that turns photos and scans
+Everything in this repository was written during the hackathon (27 Oct to 4 Nov 2026): the
+first commit is 3 Nov 2026, 00:36 UTC. It is built for [Bevell](https://bevell.app), an existing product that turns photos and scans
 into 2D CAD, but it uses none of Bevell's code or services: Bevell's own code is not here and
 is not part of this submission. Joining the two later means calling this service from Bevell,
 or Bevell's public API from here, never sharing code.
@@ -64,9 +66,16 @@ photos on the capture sheet
   -> CAD: revolve, stacked extrusions, a loft that stays on the scan, or NURBS patches; the
      holder, pads and fixture
   -> optional: Muse Spark writes an editable feature tree, tuned against the photos
+  -> scissors (beta): the pivot screw found in the photo from above and put on the SO-101's
+     hinge, a snap clip per finger loop, the scissors cut out, tested in MuJoCo
 ```
 
 ## Measured
+
+**Live, on the deployed app** (5 Nov 2026, `tools/webapp_e2e.py`, which opens every file a
+run returns): the bracket's photos came back as sketch-and-extrude CAD in 185 s (19 of 19 files),
+the Mario figure's as smooth NURBS in 171 s (17 of 17), and 11 photos of a real pair of scissors
+as custom grippers in 246 s (34 of 34). 89 tests pass (`pytest`).
 
 **Fifteen objects with known true shapes**: ten scanned household objects from Google
 Scanned Objects and five parts we designed (a bracket, an L-bracket, a gear, a sloped stand
@@ -121,8 +130,9 @@ figure (the scan itself is 0.92), and open in Fusion as one solid.
 photos from one side only, blurred, dark, shrunk to 640 px, 48 MP, rotated by their EXIF tag,
 PNG and iPhone HEIC all come out within 2.5 mm of the true size. An unreadable photo is skipped
 and named; photos of another object mixed in are left out. Sixteen copies of one photo, and
-photos cropped so the sheet is gone, are refused with what to do instead. 13 of 13 pass. The web API is covered by 50 tests (passcode, own API keys, daily caps,
-file types, ids, path traversal).
+photos cropped so the sheet is gone, are refused with what to do instead. 13 of 13 pass (5 Nov 2026). The web API is covered by 54
+tests (passcode, own API keys, Bevell Unlimited keys, daily caps, file types, ids, path
+traversal).
 
 **Robot fixture:** the printed tag is found by a camera at its id and size, and its pose 300 mm
 away within 3 mm (`tests/test_fixture.py`, `tools/pick_preview.py`). The tag PDF's second
@@ -138,7 +148,7 @@ export MODEL_API_KEY=...   # Meta Model API
 ```
 
 Then open http://localhost:8300 on a phone or a laptop. A deployed copy runs at
-https://nataliechan1963--bevell-3d-web.us-east.modal.run (`modal_app/web.py`). Anyone can run
+https://bevell.app/3d (`modal_app/web.py` on Modal). Anyone can run
 a scan there with their own Meta Model API key, judges have a passcode, and the examples are open
 to all. The key is used only for that scan and is not stored. Bevell Unlimited subscribers can
 use a Bevell API key instead (https://bevell.app/developers), and their scans run on our Meta key. `python -m bevell3d.run --out out/x
