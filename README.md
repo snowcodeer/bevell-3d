@@ -202,6 +202,10 @@ models measure and fill in, the geometry is computed.
   print came off a Bambu on 5 Nov 2026 (below). The gripper servo got stuck before the cutting
   test, so the snap fit and the cut are not yet proven in plastic.
 
+> **A note from the deadline:** I had a flight to catch five hours after the deadline, and I
+> smashed my phone trying to get the stuck servo off before it. So the cut on camera will have to
+> wait. The parts are printed, and the next step is to put them on and try it.
+
 <p align="center"><img src="docs/images/grippers-printing.gif" width="520" alt="Time-lapse of the two new SO-101 jaw parts printing on a Bambu Lab printer"><br><sub>The first print of the two jaw parts, sped up.</sub></p>
 
 ## Credits
