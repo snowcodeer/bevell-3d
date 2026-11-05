@@ -5,7 +5,7 @@ Due 4 Nov 2026, 9pm ET (02:00 UK, Thu 5 Nov).
 
 **Team name:** Bevell
 
-**Track:** Startups Track. **Problem statement:** Push the Frontier (manufacturing, robotics).
+**Track:** Indie developer track (switched from Startups on 5 Nov 2026, after submitting). **Problem statement:** Push the Frontier (manufacturing, robotics).
 
 **Project name:** Bevell 3D
 
