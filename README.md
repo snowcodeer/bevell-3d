@@ -8,7 +8,7 @@ Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 
 ## Try it
 
-- **Live app:** https://nataliechan1963--bevell-3d-web.us-east.modal.run, on a phone or a laptop.
+- **Live app:** https://bevell.app/3d (it runs at https://nataliechan1963--bevell-3d-web.us-east.modal.run), on a phone or a laptop.
 - **Examples**, open to everyone: a bottle, a bracket, a gear, a mug, a hobby servo, a Mario figure,
   a fish toothbrush holder and a roll of tape, each with its model, CAD and files.
 - **Run your own scan** with your own Meta Model API key (used for that scan only, never stored),

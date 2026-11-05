@@ -40,7 +40,7 @@ mistakes.
 (bevell.app), an existing 2D photo-to-CAD product, but contains none of Bevell's code and calls
 none of its services for the pipeline. The README says so at the top.
 
-**Live demo:** https://nataliechan1963--bevell-3d-web.us-east.modal.run
+**Live demo:** https://bevell.app/3d (redirects to https://nataliechan1963--bevell-3d-web.us-east.modal.run)
 
 - The examples on the start screen are open to everyone.
 - Judges: the passcode is in the form's notes.

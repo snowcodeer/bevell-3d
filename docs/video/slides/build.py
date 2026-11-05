@@ -4,7 +4,7 @@
 import os, subprocess, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-URL = "nataliechan1963--bevell-3d-web.us-east.modal.run"
+URL = "bevell.app/3d"
 
 HEAD = """<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
