@@ -382,6 +382,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 
 const $ = (id) => document.getElementById(id);
+const DEMO = new URLSearchParams(location.search).has("demo");     // for filming: replays a finished gripper run
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const COARSE = matchMedia("(pointer: coarse)").matches;
 // Bambu Studio registers bambustudioopen:// on macOS (checked against 02.08 on 3 Nov 2026: it
@@ -686,7 +687,7 @@ async function upload() {
   $("up-err").hidden = true;
   if (keyLooksWrong()) { $("up-err").textContent = KEY_BAD; $("up-err").hidden = false; $("own-key").focus(); return; }
   const btn = $("actions").querySelector(".primary"); btn.disabled = true; btn.textContent = "Uploading…";
-  const fd = new FormData(); files.forEach((f) => fd.append("photos", f, f.name)); fd.append("mode", mode);
+  const fd = new FormData(); files.forEach((f) => fd.append("photos", f, f.name)); fd.append("mode", mode); if (DEMO) fd.append("demo", "1");
   let msg;
   try {
     const r = await fetch("/api/scans", { method: "POST", body: fd, headers: accessHeaders() }); const j = await r.json();

@@ -385,3 +385,37 @@ def test_each_unlimited_account_has_its_own_daily_cap(client, monkeypatch):
     assert r.status_code == 429 and "Bevell Unlimited" in r.json()["detail"]
     bevell(monkeypatch, account="acct-2")
     assert client.post("/api/scans", files=photos(8), headers=own("bvl_other_key_2")).status_code == 200
+
+
+def _finished_gripper_run(tmp_path, sid="srcgripper01", created=1.0, clip=True):
+    res = tmp_path / sid / "result"
+    res.mkdir(parents=True)
+    for n in ("custom_jaws.3mf", "custom_moving_jaw.stl", "model.step") + (("custom_jaws_sim_three_quarter.mp4",) if clip else ()):
+        (res / n).write_bytes(b"x")
+    (tmp_path / sid / "status.json").write_text(json.dumps({"state": "done", "mode": "gripper", "created": created,
+                                                             "summary": {"custom_jaws": {"sim": {"gripper_max_deg": 25.8}}},
+                                                             "plan": {"object": "black scissors"}}))
+    return sid
+
+
+def test_a_demo_upload_replays_the_newest_finished_gripper_run_without_counting(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "DEMO_PACE", 0.0)
+    monkeypatch.setattr(server, "DAILY_CAP", 1)
+    _finished_gripper_run(tmp_path, "oldgripper01", created=1.0)
+    src = _finished_gripper_run(tmp_path, "newgripper01", created=2.0)
+    _finished_gripper_run(tmp_path, "noclipgrip01", created=3.0, clip=False)       # newer, but no MuJoCo clip
+    for _ in range(2):                                                                 # a cap of 1 is not used up
+        r = client.post("/api/scans", files=photos(11), data={"mode": "gripper", "demo": "1"})
+        assert r.status_code == 200
+    st = client.get(f"/api/scans/{r.json()['id']}").json()
+    assert st["state"] == "done" and st["demo_of"] == src and st["photos"] == 11
+    assert {"custom_jaws.3mf", "custom_jaws_sim_three_quarter.mp4"} <= {f["name"] for f in st["files"]}
+    assert st["summary"]["custom_jaws"]["sim"]["gripper_max_deg"] == 25.8 and "grippers" in st["done"]
+    assert not client.started                                                          # no real run, no model
+
+
+def test_without_demo_a_gripper_upload_is_a_normal_run(client, tmp_path):
+    _finished_gripper_run(tmp_path)
+    r = client.post("/api/scans", files=photos(11), data={"mode": "gripper"})
+    assert r.status_code == 200 and len(client.started) == 1
+    assert "demo_of" not in client.get(f"/api/scans/{r.json()['id']}").json()
