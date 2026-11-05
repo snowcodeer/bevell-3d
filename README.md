@@ -10,6 +10,24 @@ custom grippers for the SO-101 arm instead (beta): new jaw parts with the scisso
 the gripper's hinge and a snap clip for each finger loop, tested in MuJoCo. Built for the
 Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 
+## Clips
+
+More footage than the demo video had room for. A longer cut of the video with all of it (3 min,
+[docs/videos/demo-extended-3min.mp4](docs/videos/demo-extended-3min.mp4)), and each clip below.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/full-arm-mujoco.gif" alt="The whole SO-101 arm in MuJoCo with the new jaws holding the scissors, snipping"><br><sub>The whole SO-101 in MuJoCo with the new jaws, the scissors snipping as the arm moves (scissors drawn light grey so they show). <a href="docs/videos/full-arm-mujoco.mp4">MP4</a></sub></td>
+<td width="50%"><img src="docs/images/real-scan.gif" alt="The real scan: guided photos of the scissors on a phone, then the model and the jaws"><br><sub>The real scan: 11 guided photos of the scissors on a phone, then the model and the custom jaws on the result page. <a href="docs/videos/real-scan.mp4">MP4</a></sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/segmentation-11-photos.gif" alt="SAM 3.1's outline of the scissors in each of the 11 photos"><br><sub>SAM 3.1's outline of the scissors in each of the 11 photos.</sub></td>
+<td width="50%"><img src="docs/images/cameras-sam3d.gif" alt="Each photo's camera located from the sheet's markers, and SAM 3D's model placed among them"><br><sub>Each photo's camera, located from the sheet's markers, and SAM 3D's model sized and placed by them.</sub></td>
+</tr>
+</table>
+
+The first print of the jaws is further down (<a href="#custom-robot-grippers-for-a-tool-beta-so-101">custom grippers</a>), and as an MP4: [docs/videos/first-print-timelapse.mp4](docs/videos/first-print-timelapse.mp4).
+
 ## Try it
 
 **Without a login:**
@@ -205,6 +223,8 @@ models measure and fill in, the geometry is computed.
 > **A note from the deadline:** I had a flight to catch five hours after the deadline, and I
 > smashed my phone trying to get the stuck servo off before it. So the cut on camera will have to
 > wait. The parts are printed, and the next step is to put them on and try it.
+
+<p align="center"><img src="docs/images/blooper.jpg" width="560" alt="Blooper card: the gripper parts on the desk after the servo got stuck"><br><sub>The blooper at the end of the longer cut.</sub></p>
 
 <p align="center"><img src="docs/images/grippers-printing.gif" width="520" alt="Time-lapse of the two new SO-101 jaw parts printing on a Bambu Lab printer"><br><sub>The first print of the two jaw parts, sped up.</sub></p>
 
