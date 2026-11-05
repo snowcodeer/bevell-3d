@@ -6,6 +6,18 @@ custom grippers for the SO-101 arm instead (beta): new jaw parts with the scisso
 the gripper's hinge and a snap clip for each finger loop, tested in MuJoCo. Built for the
 Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 
+## Try it
+
+- **Live app:** https://nataliechan1963--bevell-3d-web.us-east.modal.run, on a phone or a laptop.
+- **Examples**, open to everyone: a bottle, a bracket, a gear, a mug, a hobby servo, a Mario figure,
+  a fish toothbrush holder and a roll of tape, each with its model, CAD and files.
+- **Run your own scan** with your own Meta Model API key (used for that scan only, never stored),
+  or with a Bevell API key on [Bevell Unlimited](https://bevell.app/pricing) (make a key at
+  https://bevell.app/developers). Judges have a passcode in the submission.
+- **A finished gripper run** on a real pair of scissors, from 11 photos:
+  https://nataliechan1963--bevell-3d-web.us-east.modal.run/#result/d3d1fa28d05e
+- **Bevell**, the product this is built for: https://bevell.app (photos and scans to 2D CAD).
+
 ## What is new in this hackathon
 
 Everything in this repository was written during the hackathon (27 Oct to 4 Nov 2026), from
@@ -17,7 +29,7 @@ or Bevell's public API from here, never sharing code.
 ## What it does
 
 1. Print `assets/bevell_capture_sheet.pdf` on A4 and put the object in the middle.
-2. Take 16 photos with a phone: 6 from 45°, 8 from low down, 2 from above.
+2. Take 11 photos with a phone, guided by the app: 6 from 45°, 4 from low down, 1 from above.
 3. Upload them. Back come:
    - the model at true size, as STEP and STL;
    - CAD that fits the object: a revolve for turned parts, sketches and extrusions for
@@ -135,25 +147,35 @@ photos/*.jpg` runs the same pipeline from the command line.
 To build a feature tree inside Fusion 360, start the BevellBridge add-in
 (`fusion_bridge/BevellBridge`) and run `python -m tools.fusion_e2e`.
 
-## Robot fingers for a tool
+## Custom robot grippers for a tool (beta, SO-101)
 
-"Make robot fingers" on the start screen takes the same guided photos of a pair of scissors or
-pliers lying flat and closed, and returns two gripper fingers for the SO-101 that let it hold
-the tool and work it (`bevell3d/tool_fingers.py`):
+"Make custom robot grippers" on the start screen takes the same guided photos of a pair of
+scissors lying flat and closed, and returns two new parts for the SO-101 that replace its own
+moving jaw and wrist-roll follower (`bevell3d/custom_jaws.py`). Unscrew the stock parts, screw
+these on with the same screws, and snap the scissors in. The design is deterministic: the
+models measure and fill in, the geometry is computed.
 
-- The tool's outline comes from the photos taken from above, projected onto the sheet, finger
-  loops included. On stand-in scissors it is 1.1 mm off at worst (the 3D scan's is 1.8).
-- At the handles' widest line each jaw gets a saddle shaped to its handle (the outer side of
-  each finger-loop ring), with zip-tie notches. Stand-in scissors: jaw gap 63.1 mm, rings
-  gripped 5.1 and 5.2 mm (true 62.6, 4.9 and 4.6).
-- **Tested in MuJoCo** (`bevell3d/scissors_sim.py`) with The Robot Studio's own SO-101 jaw meshes
-  and gripper hinge: the scan split into two halves on a hinge at the pivot, the gripper's
-  servo driving them. The SO-101's jaw turns about a hinge high in the wrist and the scissors
-  about their pivot below the fingertips, so the moving jaw's loop has to ride a rail. A rail
-  pointing at the scissors' pivot drives them steadily: 19.5 degrees of gripper opens the
-  blades about 19, the same on the scan and on the exact shape, the joint holding to 0.03 mm,
-  the loop sliding 21 mm. That rail sits 56 degrees off the finger, so its bracket is still to
-  design; a rail along the finger fits flat but let the loop run on the exact shape.
+- **The pivot is the screw.** The photo taken from above is flattened onto the sheet at 0.1 mm
+  a pixel and the screw found as the innermost circle near the tool's axis
+  (`bevell3d/tool_geometry.py`). On the real pair it is 0.3 mm off the axis. The pivot goes on
+  the gripper's own hinge (from the official SO-101 MJCF), with the scissors beside the gripper,
+  so the blades open exactly as far as the jaw.
+- **The outline** comes from the photos from above; the finger holes come from SAM 3D when it
+  agrees with the photos on the outside edge, because the masks of clear plastic handles fill
+  the holes. Loops that touch each other are split at their shared wall.
+- **A snap clip per finger loop:** a channel round the loop with 0.4 mm clearance, and one lip
+  on the wall away from the arm (the arm stiffens the wall it joins), so the loop snaps in past
+  a mouth 0.5 mm narrower than itself.
+- **The scissors are cut out of both parts** with 0.4 mm clearance, and from the fixed part the
+  moving half's whole sweep, so nothing stands where the scissors are or go.
+- **Arms** are rounded hulls from each clip to the jaw's own surface, blended in with a 4 mm
+  fillet (`bevell3d/blend.py`). Every layout (side, loops forward or back, either way up) is
+  checked for collisions over the stroke and the first clear one kept.
+- **Tested in MuJoCo** before anything is printed: on the live run the gripper's 25.8 degrees
+  open the blades 25.8 degrees, the blades are shut with the gripper closed, and nothing
+  collides. The result page plays the simulation.
+- **To print:** `custom_jaws.3mf` holds both parts flat on the plate for Bambu Studio. The first
+  print of these parts is in progress; the snap fit is not yet proven in plastic.
 
 ## Credits
 

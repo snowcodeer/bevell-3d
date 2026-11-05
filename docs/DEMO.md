@@ -1,5 +1,9 @@
 # Demo video: script and shots (3 minutes)
 
+**Record from `docs/video/slides/slides.md`**: it is the current script, slide by slide, with the
+examples section (bottle, bracket, servo, Mario, mug) after the grippers. This file keeps the
+checklists and the lines to avoid.
+
 The story: **a robot arm can't use scissors. Fifteen photos give it grippers that can.**
 
 Say "first prototype", "beta, SO-101 and scissors for now" and "tested in simulation". The snap
