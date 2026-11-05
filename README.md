@@ -10,15 +10,28 @@ Meta Global AI Developer Hackathon (27 Oct to 4 Nov 2026).
 
 ## Try it
 
-- **Live app:** https://bevell.app/3d (it runs at https://nataliechan1963--bevell-3d-web.us-east.modal.run), on a phone or a laptop.
-- **Examples**, open to everyone: a bottle, a bracket, a gear, a mug, a hobby servo, a Mario figure,
-  a fish toothbrush holder and a roll of tape, each with its model, CAD and files.
-- **Run your own scan** with your own Meta Model API key (used for that scan only, never stored),
-  or with a Bevell API key on [Bevell Unlimited](https://bevell.app/pricing) (make a key at
-  https://bevell.app/developers). Judges have a passcode in the submission.
+**Without a login:**
+- **Examples:** open https://bevell.app/3d and tap "See examples": a bottle, a bracket, a gear,
+  a mug, a hobby servo, a Mario figure, a fish toothbrush holder and a roll of tape, each with
+  its model, CAD and files. Results open on Muse Spark's editable CAD where there is one.
+- **Demo mode (a replay):** open https://bevell.app/3d?demo, tap "Make custom robot grippers"
+  and take or choose the photos. No login, and no photos are uploaded (only how many there
+  are). It replays a finished real gripper run of a pair of scissors in about 30 s, through the
+  same screens, and opens its result: the grippers, the MuJoCo clip and the files. It is a
+  replay, not a new scan.
 - **A finished gripper run** on a real pair of scissors, from 11 photos:
-  https://nataliechan1963--bevell-3d-web.us-east.modal.run/#result/d3d1fa28d05e
-- **Bevell**, the product this is built for: https://bevell.app (photos and scans to 2D CAD).
+  https://bevell.app/3d#result/d3d1fa28d05e
+
+**A real run on your own photos:** print the sheet (the app links it), take the photos it asks
+for, and paste your own Meta Model API key into the key field (used for that scan only, never
+stored), or a Bevell API key on [Bevell Unlimited](https://bevell.app/pricing) (make one at
+https://bevell.app/developers).
+
+Daily limits: own-key runs 200 a day across visitors, Bevell Unlimited 20 per account a day,
+demo replays 300 a day (`BYOK_DAILY_CAP`, `UNLIMITED_DAILY_CAP` and `DEMO_DAILY_CAP` in
+`webapp/server.py`).
+
+**Bevell**, the product this is built for: https://bevell.app (photos and scans to 2D CAD).
 
 ## What is new in this hackathon
 
@@ -131,8 +144,8 @@ photos from one side only, blurred, dark, shrunk to 640 px, 48 MP, rotated by th
 PNG and iPhone HEIC all come out within 2.5 mm of the true size. An unreadable photo is skipped
 and named; photos of another object mixed in are left out. Sixteen copies of one photo, and
 photos cropped so the sheet is gone, are refused with what to do instead. 13 of 13 pass (5 Nov 2026). The web API is covered by 54
-tests (passcode, own API keys, Bevell Unlimited keys, daily caps, file types, ids, path
-traversal).
+tests (access, own API keys, Bevell Unlimited keys, demo replays, daily caps, file types,
+ids, path traversal).
 
 **Robot fixture:** the printed tag is found by a camera at its id and size, and its pose 300 mm
 away within 3 mm (`tests/test_fixture.py`, `tools/pick_preview.py`). The tag PDF's second
@@ -148,11 +161,8 @@ export MODEL_API_KEY=...   # Meta Model API
 ```
 
 Then open http://localhost:8300 on a phone or a laptop. A deployed copy runs at
-https://bevell.app/3d (`modal_app/web.py` on Modal). Anyone can run
-a scan there with their own Meta Model API key, judges have a passcode, and the examples are open
-to all. The key is used only for that scan and is not stored. Bevell Unlimited subscribers can
-use a Bevell API key instead (https://bevell.app/developers), and their scans run on our Meta key. `python -m bevell3d.run --out out/x
-photos/*.jpg` runs the same pipeline from the command line.
+https://bevell.app/3d (`modal_app/web.py` on Modal); see "Try it" for how to use it.
+`python -m bevell3d.run --out out/x photos/*.jpg` runs the same pipeline from the command line.
 
 To build a feature tree inside Fusion 360, start the BevellBridge add-in
 (`fusion_bridge/BevellBridge`) and run `python -m tools.fusion_e2e`.
