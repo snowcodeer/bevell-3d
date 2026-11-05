@@ -1,6 +1,6 @@
 # Bevell 3D
 
-<p align="center"><img src="docs/images/full-arm-mujoco.gif" width="760" alt="The whole SO-101 arm in MuJoCo with custom jaws designed from phone photos, holding a pair of scissors and snipping"><br><sub>Custom SO-101 jaws designed from phone photos of a pair of scissors, on the whole arm in MuJoCo (scissors drawn light grey so they show). <a href="docs/videos/full-arm-mujoco.mp4">MP4</a></sub></p>
+<p align="center"><img src="docs/images/full-arm-mujoco.gif" width="760" alt="The whole SO-101 arm in MuJoCo with custom jaws designed from phone photos, holding a pair of scissors and snipping"><br><sub>Custom SO-101 jaws designed from phone photos of a pair of scissors, on the whole arm in MuJoCo (scissors drawn light grey so they show). Happy Halloween from Edbot Scissorhands. <a href="docs/videos/full-arm-mujoco.mp4">MP4</a></sub></p>
 
 There are lots of general-purpose robots now, but it's hard for them to handle individual tools.
 A standard gripper can hold a pair of scissors; it can't use them. So why not prototype custom
