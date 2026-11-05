@@ -57,34 +57,20 @@ ul.k li { font-size:26px; color:#D6D9DF; padding-left:24px; position:relative; l
 ul.k li::before { content:""; position:absolute; left:2px; top:14px; width:9px; height:9px; border-radius:50%; background:var(--accent); }
 .stat { font:600 27px var(--display); background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 20px; }
 .stat b { color:var(--pale); }
-.stage { position:absolute; left:72px; right:72px; top:290px; bottom:96px; display:flex; flex-direction:column; justify-content:center; }
+.box.big h3 { font-size:42px; margin:0; } .box.big p { font-size:31px; margin-top:10px; } .box.big { padding:36px 38px; }
+.col { display:flex; flex-direction:column; gap:18px; }
+.stage { position:absolute; left:72px; right:72px; top:250px; bottom:96px; display:flex; flex-direction:column; justify-content:center; }
 </style></head><body>
 <div class="top"><div class="brand"><img class="mark" src="logo-icon.svg"><img class="word" src="bevell-wordmark.svg"><span class="badge">3D</span></div><div class="step">Architecture · 1 of 4</div></div>
 
-<h1>The system</h1>
-<p class="sub">A phone, one web app on Modal, and three Meta models.</p><div class="stage">
+<h1>The system</h1><div class="stage">
 <div class="flow" style="align-items:center">
- <div style="flex:0 0 380px; display:flex; flex-direction:column; gap:18px">
-  <div class="box"><h3>Phone browser</h3><p>Guided camera: the sheet and arrows for each angle</p></div>
-  <div class="box"><h3>Result</h3><p>3D viewer, then STEP, STL and a 3MF for Bambu Studio</p></div>
- </div>
- <div style="flex:0 0 70px; display:flex; flex-direction:column; gap:110px"><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M38 14H8M18 4L6 14l12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
- <div class="box acc" style="flex:1">
-  <h3>Web app on Modal <span class="tag grey">FastAPI · 4 CPUs</span></h3>
-  <p>Takes the photos, keeps every scan on a Modal volume, and serves the files.</p>
-  <div class="box" style="margin-top:18px; background:#20242B"><h3>Each scan: its own process</h3><p>The pipeline, from photos to CAD and grippers</p></div>
- </div>
+ <div class="box big" style="flex:0 0 340px"><h3>Phone</h3><p>Guided camera</p></div>
+ <div style="flex:0 0 70px; display:flex; flex-direction:column; gap:40px"><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M38 14H8M18 4L6 14l12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+ <div class="box big acc" style="flex:1"><h3>Web app on Modal</h3><p>Each scan, its own process</p></div>
  <div style="flex:0 0 70px; display:flex; flex-direction:column; gap:150px"><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
- <div style="flex:0 0 470px; display:flex; flex-direction:column; gap:18px">
-  <div class="box"><h3>Meta Model API <span class="tag grey">HTTPS</span></h3>
-   <ul class="k"><li>Muse Spark <span class="tag">Meta</span></li><li>SAM 3.1 <span class="tag">Meta</span></li></ul></div>
-  <div class="box"><h3>Modal GPU <span class="tag grey">L40S</span></h3>
-   <ul class="k"><li>SAM 3D Objects <span class="tag">Meta</span></li><li>Open weights</li></ul></div>
+ <div style="flex:0 0 520px; display:flex; flex-direction:column; gap:26px">
+  <div class="box big"><h3>Meta Model API</h3><p>Muse Spark <span class="tag">Meta</span><br>SAM 3.1 <span class="tag">Meta</span></p></div>
+  <div class="box big"><h3>Modal L40S GPU</h3><p>SAM 3D Objects <span class="tag">Meta</span></p></div>
  </div>
-</div>
-<div style="display:flex; gap:16px; margin-top:56px; align-items:center">
- <span style="font:600 24px var(--body); color:var(--muted); margin-right:6px">Who can run it</span>
- <div class="stat">Judges' passcode <b>50 a day</b></div>
- <div class="stat">Your own Meta key <b>200 a day</b></div>
- <div class="stat">Bevell Unlimited key <b>20 a day</b></div>
 </div></div><footer><span>Bevell 3D · Meta AI hackathon</span><span>Architecture</span></footer></body></html>

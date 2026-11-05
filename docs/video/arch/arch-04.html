@@ -57,32 +57,18 @@ ul.k li { font-size:26px; color:#D6D9DF; padding-left:24px; position:relative; l
 ul.k li::before { content:""; position:absolute; left:2px; top:14px; width:9px; height:9px; border-radius:50%; background:var(--accent); }
 .stat { font:600 27px var(--display); background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 20px; }
 .stat b { color:var(--pale); }
-.stage { position:absolute; left:72px; right:72px; top:290px; bottom:96px; display:flex; flex-direction:column; justify-content:center; }
+.box.big h3 { font-size:42px; margin:0; } .box.big p { font-size:31px; margin-top:10px; } .box.big { padding:36px 38px; }
+.col { display:flex; flex-direction:column; gap:18px; }
+.stage { position:absolute; left:72px; right:72px; top:250px; bottom:96px; display:flex; flex-direction:column; justify-content:center; }
 </style></head><body>
 <div class="top"><div class="brand"><img class="mark" src="logo-icon.svg"><img class="word" src="bevell-wordmark.svg"><span class="badge">3D</span></div><div class="step">Architecture · 4 of 4</div></div>
 
-<h1>Custom grippers <span class="tag" style="font-size:22px; vertical-align:middle">Beta · SO-101</span> <span class="tag grey" style="font-size:22px; vertical-align:middle">Deterministic, no AI guessing</span></h1>
-<p class="sub">From the measured scissors to two parts that replace the SO-101's own.</p><div class="stage">
+<h1>Custom grippers <span class="tag" style="font-size:24px; vertical-align:middle">Beta · SO-101</span></h1><div class="stage">
 <div class="flow">
  <div class="group" style="flex:1"><div class="gh">Read the tool</div>
-  <ul class="k">
-   <li>Outline from the overhead masks</li>
-   <li>Finger holes from SAM 3D where it agrees on the outside edge</li>
-   <li>Finger loops, split where they touch</li>
-   <li>Pivot: Hough circles on the flattened top photo, the innermost one</li>
-  </ul></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
- <div class="group" style="flex:1.12"><div class="gh">Design the parts</div>
-  <ul class="k">
-   <li>Hinge from the SO-101's own MJCF</li>
-   <li>Pivot on the hinge: blades open with the jaw</li>
-   <li>A snap clip per loop: one-sided lip, 0.4 mm clearance</li>
-   <li>Scissors cut out, moving half's sweep too</li>
-   <li>Rounded arms, 4 mm fillet by SDF closing</li>
-  </ul></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
- <div class="group" style="flex:0.95"><div class="gh">Check and ship</div>
-  <ul class="k">
-   <li>Arrangement search until nothing collides</li>
-   <li>MuJoCo: jaw 25.8°, blades 25.8°</li>
-   <li>Print plate 3MF, both parts flat on the bed</li>
-  </ul></div>
+  <div class="col"><div class="box big"><h3>Outline + SAM 3D holes</h3></div><div class="box big"><h3>Finger loops</h3></div><div class="box big"><h3>Pivot = screw</h3></div></div></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+ <div class="group" style="flex:1"><div class="gh">Design the parts</div>
+  <div class="col"><div class="box big"><h3>Pivot on the hinge</h3></div><div class="box big"><h3>Snap clip per loop</h3></div><div class="box big"><h3>Scissors cut out</h3></div></div></div><div class="arrow"><svg viewBox="0 0 40 28"><path d="M2 14h30M22 4l12 10-12 10" fill="none" stroke="#395AF6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+ <div class="group" style="flex:1"><div class="gh">Check and ship</div>
+  <div class="col"><div class="box big"><h3>4 mm fillets</h3></div><div class="box big acc"><h3>MuJoCo: no collisions</h3></div><div class="box big"><h3>Print plate 3MF</h3></div></div></div>
 </div></div><footer><span>Bevell 3D · Meta AI hackathon</span><span>Architecture</span></footer></body></html>
