@@ -436,12 +436,22 @@ def config():
 
 
 @app.post("/api/scans")
-async def create_scan(request: Request, photos: list[UploadFile] = File(...), mode: str = Form("scan"),
-                      demo: str = Form("")):
+async def create_scan(request: Request, photos: list[UploadFile] = File(None), mode: str = Form("scan"),
+                      demo: str = Form(""), count: int = Form(0)):
     # A demo replays a finished gripper run and calls no model, so it needs no passcode or key; it
     # has a daily cap of its own so the uploads cannot fill the volume.
     source = _demo_source() if demo == "1" and mode == "gripper" else None   # none: a normal run
     key, bucket = (None, "demo") if source else await run_in_threadpool(_check_access, request)   # may ask bevell.app
+    photos = photos or []
+    if source:
+        # Nothing is stored: the demo only needs how many photos were taken.
+        n = max(0, min(int(count or len(photos)), MAX_PHOTOS))
+        _count_run(bucket)
+        scan_id = uuid.uuid4().hex[:12]
+        os.makedirs(os.path.join(SCANS, scan_id))
+        _status(scan_id, state="queued", stage="queued", photos=n, created=time.time(), mode="gripper")
+        threading.Thread(target=_demo, args=(scan_id, source, n), daemon=True).start()
+        return {"id": scan_id}
     if not (MIN_PHOTOS <= len(photos) <= MAX_PHOTOS):
         raise HTTPException(400, f"Upload {MIN_PHOTOS} to {MAX_PHOTOS} photos; you sent {len(photos)}.")
     _count_run(bucket)

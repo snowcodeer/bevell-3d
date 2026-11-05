@@ -688,7 +688,9 @@ async function upload() {
   $("up-err").hidden = true;
   if (keyLooksWrong()) { $("up-err").textContent = KEY_BAD; $("up-err").hidden = false; $("own-key").focus(); return; }
   const btn = $("actions").querySelector(".primary"); btn.disabled = true; btn.textContent = "Uploading…";
-  const fd = new FormData(); files.forEach((f) => fd.append("photos", f, f.name)); fd.append("mode", mode); if (DEMO) fd.append("demo", "1");
+  // A demo sends only how many photos were taken: they go nowhere, it replays a finished run.
+  const fd = new FormData(); if (!DEMO) files.forEach((f) => fd.append("photos", f, f.name)); fd.append("mode", mode);
+  if (DEMO) { fd.append("demo", "1"); fd.append("count", String(files.length)); }
   let msg;
   try {
     const r = await fetch("/api/scans", { method: "POST", body: fd, headers: accessHeaders() }); const j = await r.json();

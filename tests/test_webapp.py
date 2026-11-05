@@ -430,3 +430,14 @@ def test_a_demo_needs_no_passcode_but_a_real_run_still_does(client, tmp_path, mo
     assert client.post("/api/scans", files=photos(11), data={"mode": "gripper"}).status_code == 401
     monkeypatch.setattr(server, "DEMO_DAILY_CAP", 1)
     assert client.post("/api/scans", files=photos(11), data={"mode": "gripper", "demo": "1"}).status_code == 429
+
+
+def test_a_demo_stores_no_photos_and_needs_only_the_count(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "DEMO_PACE", 0.0)
+    _finished_gripper_run(tmp_path, "newgripper01", created=2.0)
+    r = client.post("/api/scans", data={"mode": "gripper", "demo": "1", "count": "11"})
+    assert r.status_code == 200
+    sid = r.json()["id"]
+    st = client.get(f"/api/scans/{sid}").json()
+    assert st["state"] == "done" and st["photos"] == 11 and st["demo_of"] == "newgripper01"
+    assert not (tmp_path / sid / "upload").exists()
