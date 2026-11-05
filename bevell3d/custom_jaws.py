@@ -19,8 +19,8 @@ import argparse, json, math, os, pickle
 import numpy as np
 import trimesh
 from shapely.geometry import Point, Polygon
-from .tool_fingers import handles, mesh_outline, top_outline, FingerParams
-from .scissors_sim import pivot_of
+# tool_fingers (and scissors_sim through it) import CadQuery, 14 s: imported where used, so the
+# simulation alone (the result page's clip, rendered in its own process) loads in about a second.
 
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "third_party", "so101")
 H = np.array([20.2, 18.8, -23.4])                       # the gripper hinge, gripper frame (mm)
@@ -61,7 +61,7 @@ def _extrude(poly, z0, z1):
     return trimesh.boolean.union(parts, engine="manifold") if len(parts) > 1 else parts[0]
 
 
-def loop_clip_mesh(outline, h, p=FingerParams(), span=None, wall=1.8, lip=0.5, lip_width=1.6, arm_top=True):
+def loop_clip_mesh(outline, h, p=None, span=None, wall=1.8, lip=0.5, lip_width=1.6, arm_top=True):
     """A clip round one finger-loop ring, sheet frame: a solid round the ring's stretch about the
     grasp point, `wall` mm thick, that reaches `lip_width` into the hole. The ring's slot is not
     cut here: `design` cuts the whole tool out of the part (one shape, so no slivers where two
@@ -149,8 +149,11 @@ def _arm(clip, part, toward, thickness=6.0, depth=3.0):
     return _rounded_hull(np.vstack([face, P, sunk])), float(dist[0])
 
 
-def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=FingerParams()):
+def design(scan_dir, side=-1.0, gap=4.0, loops_forward=True, flip=False, p=None):
     """Both new parts (part coordinates, mm), the scissors halves (gripper frame) and a report."""
+    from .tool_fingers import handles, mesh_outline, top_outline, FingerParams
+    from .scissors_sim import pivot_of
+    p = p if p is not None else FingerParams()
     src = next(f for f in ("hull.stl", "model.stl") if os.path.exists(os.path.join(scan_dir, f)))
     mesh = trimesh.load(os.path.join(scan_dir, src))
     outline = None
@@ -382,7 +385,7 @@ if __name__ == "__main__":
     print(json.dumps(write(a.scan_dir), indent=1))
 
 
-def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30):
+def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30, cams=("side", "three_quarter"), width=1280, height=960):
     """MuJoCo: the two new parts on the SO-101's gripper hinge, each half of the scissors held rigidly
     in its clip, the gripper's position servo opening and closing. The blades' opening is read
     from the halves' own geometry, so it shows whether the scissors really open with the jaw."""
@@ -395,7 +398,7 @@ def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30):
     tmp = tempfile.mkdtemp(prefix="customjaws-")
     hm_body.export(os.path.join(tmp, "hm.stl"))
     xml = f"""<mujoco model="so101 custom scissors jaws"><compiler angle="radian" autolimits="true"/>
-<option timestep="0.002"/><visual><global offwidth="1280" offheight="960"/></visual>
+<option timestep="0.002"/><visual><global offwidth="{max(1280, width)}" offheight="{max(960, height)}"/></visual>
 <default><geom contype="0" conaffinity="0"/></default>
 <asset>
   <mesh name="fixed" file="{os.path.abspath(os.path.join(out_dir, 'custom_wrist_roll_follower.stl'))}" scale="0.001 0.001 0.001"/>
@@ -424,7 +427,7 @@ def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30):
 </mujoco>"""
     open(os.path.join(out_dir, "custom_jaws_sim.xml"), "w").write(xml)
     m = mujoco.MjModel.from_xml_string(xml); d = mujoco.MjData(m)
-    r = mujoco.Renderer(m, 960, 1280) if video else None
+    r = mujoco.Renderer(m, height, width) if video else None
     frames, opened = [], []
     hf = trimesh.load(os.path.join(out_dir, "scissors_half_fixed.stl"))
     # The blades' opening: each half's blade (the part more than 25 mm past the pivot towards the
@@ -450,19 +453,19 @@ def simulate(out_dir, video=None, q_open=0.45, seconds=4.0, fps=30):
             hm_now = hm.copy().apply_transform(moving_to_gripper(q) @ np.linalg.inv(Tm0))
             opened.append((q, math.degrees(math.acos(min(1.0, abs(float(ax(hm_now, blade_m) @ a_f)))))))
             if r:
-                for cam in ("side", "three_quarter"):
+                for cam in cams:
                     r.update_scene(d, camera=cam); frames.append((cam, r.render().copy()))
     closed = opened[0][1]
     rep = {"gripper_max_deg": round(math.degrees(max(q for q, _ in opened)), 1),
            "blades_max_deg": round(max(a for _, a in opened) - closed, 1),
            "blades_closed_deg": round(closed, 1)}
     if video:
-        for cam in ("side", "three_quarter"):
+        for cam in cams:
             fdir = tempfile.mkdtemp(prefix=f"cj-{cam}-")
             for i, (c, f) in enumerate([x for x in frames if x[0] == cam]):
                 Image.fromarray(f).save(os.path.join(fdir, f"f{i:04d}.png"))
             outp = video.replace(".mp4", f"_{cam}.mp4")
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(fps), "-i", os.path.join(fdir, "f%04d.png"),
-                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", outp], check=True)
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", outp], check=True)
             rep[f"video_{cam}"] = outp
     return rep

@@ -91,6 +91,9 @@ li.done .dot { background: var(--ok); border-color: var(--ok); }
 @media (max-width: 420px) { .seg button { font-size: 12px; padding: 9px 2px; white-space: nowrap; letter-spacing: -0.01em; } }
 .seg button.on { background: var(--accent); color: #fff; }
 #orig { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 18px; background: #16181d; }
+.simclip { margin: 4px 0 0; }
+.simclip video { width: 100%; display: block; border-radius: 14px; background: #16181d; }
+.simclip figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .hint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .fact { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
@@ -791,6 +794,8 @@ function fingersCard(st, s, f) {
     card.innerHTML = `<div class="small muted"><span class="badge">Beta · SO-101 only</span> The scissors' pivot on the gripper's hinge</div>
       <div class="facts"><div class="fact"><b>${sim.gripper_max_deg.toFixed(0)}° → ${sim.blades_max_deg.toFixed(0)}°</b><span>gripper to blades, tested in MuJoCo</span></div>
       <div class="fact"><b>${clear ? "Clear" : "Check"}</b><span>${clear ? "nothing touches over the stroke" : "parts touch over the stroke"}</span></div></div>
+      ${f["custom_jaws_sim_three_quarter.mp4"] ? `<figure class="simclip"><video src="${f["custom_jaws_sim_three_quarter.mp4"]}" autoplay muted loop playsinline preload="auto"></video>
+      <figcaption>Tested in MuJoCo: jaw ${sim.gripper_max_deg.toFixed(1)}°, blades ${sim.blades_max_deg.toFixed(1)}°, ${clear ? "no collisions" : "parts touch"}</figcaption></figure>` : ""}
       <p class="muted small">The 3D view above plays the simulated motion: the moving jaw turns the moving blade about the same hinge.</p>
       <ol class="steps"><li>Print the new moving jaw and wrist-roll follower (as you printed the originals).</li>
       <li>Unscrew the SO-101's own and fit these: same screws, same servo horn.</li>

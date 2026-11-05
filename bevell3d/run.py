@@ -64,6 +64,33 @@ def agreement(mesh, views, masks, size):
     return float(np.mean([iou(silhouette(mesh, v, size), m) for v, m in zip(views, masks)]))
 
 
+def sim_clip(out_dir, timeout=180):
+    """The MuJoCo motion as a short MP4 for the result page (custom_jaws_sim_three_quarter.mp4),
+    rendered in a child process: MuJoCo picks its GL backend when first imported, and this process
+    already imported it for the physics. Off-screen GL is OSMesa on Linux, CGL on a Mac. Never
+    raises: the scan does not fail for want of a clip."""
+    import subprocess, sys, time
+    t0 = time.time()
+    env = dict(os.environ)
+    if sys.platform.startswith("linux"):
+        env.setdefault("MUJOCO_GL", "osmesa"); env.setdefault("PYOPENGL_PLATFORM", "osmesa")
+    else:
+        env.setdefault("MUJOCO_GL", "cgl")
+    env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.pathsep + env.get("PYTHONPATH", "")
+    code = ("import sys; from bevell3d.custom_jaws import simulate; "
+            "simulate(sys.argv[1], video=sys.argv[1] + '/custom_jaws_sim.mp4', cams=('three_quarter',), "
+            "seconds=4.0, fps=15, width=960, height=720)")
+    try:
+        r = subprocess.run([sys.executable, "-c", code, out_dir], env=env, capture_output=True, text=True, timeout=timeout)
+        ok = r.returncode == 0 and os.path.exists(os.path.join(out_dir, "custom_jaws_sim_three_quarter.mp4"))
+        out = {"sim_video_s": round(time.time() - t0, 1)}
+        if not ok:
+            out["sim_video_error"] = (r.stderr or r.stdout or f"exit {r.returncode}").strip().splitlines()[-1][:300]
+        return out
+    except Exception as e:
+        return {"sim_video_error": f"{type(e).__name__}: {e}"[:300], "sim_video_s": round(time.time() - t0, 1)}
+
+
 def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings, t0, log=print, progress=lambda stage, detail="": None, tool=False):
     """Everything made from the final model: the CAD, the holders, the gripper pads, the
     renders and summary.json. Split from run() so a finished scan can be made again after a
@@ -164,6 +191,9 @@ def make_outputs(out_dir, final, hull, plan, summary, source, n_photos, timings,
                     summary["custom_jaws"] = {"collisions_mm3": cj["collisions_mm3"], "arm_mm": cj["arm_mm"], "side": cj["side"],
                                               "parts": cj["parts"], "clips": cj["clips"], "sim": sim, "hinge_mm": H_LIST,
                                               "hinge_axis": [0.0, -1.0, 0.0]}
+                    progress("grippers", "rendering the simulation")
+                    clip = sim_clip(out_dir)
+                    summary["custom_jaws"].update(clip)
                 except Exception as e:
                     summary["custom_jaws_error"] = f"{type(e).__name__}: {e}"
             # Scissors: the SO-101 working them in MuJoCo sets the gripper's range and the rail the

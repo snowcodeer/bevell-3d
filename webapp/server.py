@@ -49,6 +49,7 @@ FILES = {  # name -> (label, media type)
     "custom_jaws_moving_blade.stl": ("Animation: the moving half of the scissors", "model/stl"),
     "custom_jaws_fixed_blade.stl": ("Animation: the fixed half of the scissors", "model/stl"),
     "custom_jaws_sim.xml": ("The MuJoCo model of the custom grippers working the scissors", "application/xml"),
+    "custom_jaws_sim_three_quarter.mp4": ("The custom grippers working the scissors in MuJoCo, MP4", "video/mp4"),
     "tool_fingers.3mf": ("Custom robot grippers for this tool (stick-on), 3MF", "model/3mf"),
     "tool_fingers.stl": ("Custom robot grippers for this tool (stick-on), STL", "model/stl"),
     "tool_fingers.step": ("Custom robot grippers for this tool (stick-on), STEP", "model/step"),

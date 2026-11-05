@@ -29,6 +29,10 @@ image = (
                   "tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1 && rm /tmp/blender.tar.xz && "
                   "/opt/blender/blender -b --version | head -1")
     .pip_install_from_requirements(os.path.join(ROOT, "requirements.txt"))
+    # The gripper result's MuJoCo clip: off-screen GL in software (OSMesa) and ffmpeg to encode it.
+    # Added after the cached layers so the Blender and pip layers are not rebuilt.
+    .apt_install("ffmpeg", "libosmesa6")
+    .pip_install("PyOpenGL==3.1.7")
     .env({"BLENDER": "/opt/blender/blender", "BEVELL3D_SCANS": "/scans", "BEVELL3D_DAILY_CAP": "50"})
     .add_local_dir(os.path.join(ROOT, "bevell3d"), "/root/bevell3d")
     .add_local_dir(os.path.join(ROOT, "webapp"), "/root/webapp")
